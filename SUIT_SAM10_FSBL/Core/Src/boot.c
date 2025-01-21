@@ -384,6 +384,8 @@ void ProcessReceivedData(uint8_t* buffer, uint32_t size) {
 
 static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 {
+	uint32_t wr_addr = 0;
+
 	// Extract origin node (upper byte)
 //	ori_node = (id & 0x0f0) >> 4;
 	ori_node = (id >> 4) & 0x0F; // Shift right by 4 bits and mask with 0x0F
@@ -394,55 +396,72 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 //	if(MD_STX_ACK_Flag == 1){
 		memcpy(fdcan_rx_test_buf, rx_pData, 64);
 
-//		ProcessReceivedData(fdcan_rx_test_buf, 64);
+		memcpy(DATA_Rxbuf, &fdcan_rx_test_buf[2], 60);
 
-		switch (fnc_code){
-		case FW_UPDATE:
-			Send_STX();
-			break;
+		//		ProcessReceivedData(fdcan_rx_test_buf, 64);
 
-		case Info_MSG:
-			if (Unpack_InfoMsg(fnc_code, fdcan_rx_test_buf) < 0) {
-				//Error_Handler();
-			} else{
-				//Send NACK to CM
-				//if(Boot_UpdateFWfromFile(&loaderfs, &loaderfile_MD, (uint8_t*)MD_FW_filename, BOOT_INTERNAL_FLASH, SUIT_MD_FW_ADDRESS) == BOOT_UPDATE_OK)
+//		switch (fnc_code){
+//		case FW_UPDATE:
+//			Send_STX();
+//			break;
+//
+//		case Info_MSG:
+//			if (Unpack_InfoMsg(fnc_code, fdcan_rx_test_buf) < 0) {
+//				//Error_Handler();
+//			} else{
+//				//Send NACK to CM
+//				//if(Boot_UpdateFWfromFile(&loaderfs, &loaderfile_MD, (uint8_t*)MD_FW_filename, BOOT_INTERNAL_FLASH, SUIT_MD_FW_ADDRESS) == BOOT_UPDATE_OK)
+//
+//			}
+//			break;
+//
+//		case Data_MSG:
+//			if (Unpack_DataMsg(fnc_code, fdcan_rx_test_buf) < 0) {
+//				//Error_Handler();
+//			} else{
+//				//Send NACK to CM
+//
+//			}
+//			break;
+//
+//		case EOT:
+//			//No7
+//			//receive EOT, do CRC on whole file
+//			if(Unpack_EOT(fnc_code, fdcan_rx_test_buf)<0){
+//				//Error_Handler();
+//			} else{
+//
+//			}
+//			break;
+//
+//		case TRIGGER:
+//			if(Unpack_Trigger(fnc_code,fdcan_rx_test_buf)<0){
+//
+//			}
+//			else{
+//
+//			}
+//			break;
+//
+//
+//		default: break;
+////		}
+//	}
 
-			}
-			break;
+	    wr_size = 60;
 
-		case Data_MSG:
-			if (Unpack_DataMsg(fnc_code, fdcan_rx_test_buf) < 0) {
-				//Error_Handler();
-			} else{
-				//Send NACK to CM
+		/* Write Addr : F/W App. Address + Info Address + SOME OTHER SECTOR*/
+		wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR + f_index;//SUIT_APP_FW_ADDRESS + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
 
-			}
-			break;
+	    uint8_t triggerWrite = 0;//for overwrite and only last chunk //1;//for padded //(f_index + wr_size >= fw_bin_size); // Trigger if last chunk
 
-		case EOT:
-			//No7
-			//receive EOT, do CRC on whole file
-			if(Unpack_EOT(fnc_code, fdcan_rx_test_buf)<0){
-				//Error_Handler();
-			} else{
+	    if (IOIF_WriteFlashMassBuffered(wr_addr, &DATA_Rxbuf[f_index % sizeof(DATA_Rxbuf)], wr_size, triggerWrite) != IOIF_FLASH_STATUS_OK)
+	       {
+	           return BOOT_UPDATE_ERROR_FLASH_WRITE;
+	       }
 
-			}
-			break;
+		f_index += wr_size;
 
-		case TRIGGER:
-			if(Unpack_Trigger(fnc_code,fdcan_rx_test_buf)<0){
-
-			}
-			else{
-
-			}
-			break;
-
-
-		default: break;
-//		}
-	}
 	return 0;
 }
 
@@ -590,7 +609,7 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	DATA_msgcrc=t_datamsgcrc;
 	//get CRC
 	t_datamsgcrc_compare = Calculate_CRC16(t_datamsgcrc_compare, DATA_Rxbuf, 0, sizeof(DATA_Rxbuf));//sizeof(t_buff));
-	DATA_msgcrc_compare=t_datamsgcrc;//test//t_datamsgcrc_compare;
+	DATA_msgcrc_compare=t_datamsgcrc_compare;
 	//No6
 	//if CRC ok ACK, else NACK send
 	//Send ACK/NACK
@@ -603,21 +622,21 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 
 		fw_bin_size = INFO_filesize;
 
-//		while(f_index < fw_bin_size)
-//		{
+		while(f_index < fw_bin_size)
+		{
 			wr_size = 0;
 			uint32_t wr_addr = 0;
 
 //			wr_addr = f_index;
 //			wr_size = ((fw_bin_size-f_index) < 0) ? 0 : ((fw_bin_size-f_index > 60) ? 60 : fw_bin_size-f_index);
 
-//			if (fw_bin_size - f_index < 0) {
-//			    wr_size = 0;
-//			} else if (fw_bin_size - f_index > 60) {
+			if (fw_bin_size - f_index < 0) {
+			    wr_size = 0;
+			} else if (fw_bin_size - f_index > 60) {
 			    wr_size = 60;
-//			} else {
-//			    wr_size = fw_bin_size - f_index;
-//			}
+			} else {
+			    wr_size = fw_bin_size - f_index;
+			}
 
 			/* Write Addr : F/W App. Address + Info Address + SOME OTHER SECTOR*/
 			wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR + f_index;//SUIT_APP_FW_ADDRESS + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
@@ -635,8 +654,8 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 //			}
 
 			f_index += wr_size;
-//			break;
-//		}
+			break;
+		}
 
 		//Send ACK
 		int cursor2=0;
