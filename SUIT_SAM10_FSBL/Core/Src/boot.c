@@ -57,9 +57,13 @@ uint32_t fatfs_readbyte = 0;
 uint8_t MD_Update_Flag __attribute__((section(".MD_Update_Flag_Settings")));
 
 uint8_t MD_STX_ACK_Flag = 0;
-uint8_t MD_Info_ACK_Flag = 0;
-uint8_t MD_Data_ACK_Flag = 0;
+uint8_t MD_STX_NACK_Flag = 0;
+uint16_t MD_Info_ACK_Flag = 0;
+uint16_t MD_Info_NACK_Flag = 0;
+uint16_t MD_Data_ACK_Flag = 0;
+uint16_t MD_Data_NACK_Flag = 0;
 uint8_t MD_EOT_ACK_Flag = 0;
+uint8_t MD_EOT_NACK_Flag = 0;
 
 
 //uint8_t fdcan_tx_buf_test [64] = {0,};
@@ -384,7 +388,6 @@ void ProcessReceivedData(uint8_t* buffer, uint32_t size) {
 
 static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 {
-	uint32_t wr_addr = 0;
 
 	// Extract origin node (upper byte)
 //	ori_node = (id & 0x0f0) >> 4;
@@ -396,71 +399,73 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 //	if(MD_STX_ACK_Flag == 1){
 		memcpy(fdcan_rx_test_buf, rx_pData, 64);
 
-		memcpy(DATA_Rxbuf, &fdcan_rx_test_buf[2], 60);
+//		memcpy(DATA_Rxbuf, &fdcan_rx_test_buf[2], 60);
 
-		//		ProcessReceivedData(fdcan_rx_test_buf, 64);
+//		ProcessReceivedData(fdcan_rx_test_buf, 64);
 
-//		switch (fnc_code){
-//		case FW_UPDATE:
-//			Send_STX();
-//			break;
-//
-//		case Info_MSG:
-//			if (Unpack_InfoMsg(fnc_code, fdcan_rx_test_buf) < 0) {
-//				//Error_Handler();
-//			} else{
-//				//Send NACK to CM
-//				//if(Boot_UpdateFWfromFile(&loaderfs, &loaderfile_MD, (uint8_t*)MD_FW_filename, BOOT_INTERNAL_FLASH, SUIT_MD_FW_ADDRESS) == BOOT_UPDATE_OK)
-//
-//			}
-//			break;
-//
-//		case Data_MSG:
-//			if (Unpack_DataMsg(fnc_code, fdcan_rx_test_buf) < 0) {
-//				//Error_Handler();
-//			} else{
-//				//Send NACK to CM
-//
-//			}
-//			break;
-//
-//		case EOT:
-//			//No7
-//			//receive EOT, do CRC on whole file
-//			if(Unpack_EOT(fnc_code, fdcan_rx_test_buf)<0){
-//				//Error_Handler();
-//			} else{
-//
-//			}
-//			break;
-//
-//		case TRIGGER:
-//			if(Unpack_Trigger(fnc_code,fdcan_rx_test_buf)<0){
-//
-//			}
-//			else{
-//
-//			}
-//			break;
-//
-//
-//		default: break;
-////		}
-//	}
+		switch (fnc_code){
+		case FW_UPDATE:
+			Send_STX();
+			break;
 
-	    wr_size = 60;
+		case Info_MSG:
+			if (Unpack_InfoMsg(fnc_code, fdcan_rx_test_buf) < 0) {
+				//Error_Handler();
+			} else{
+				//Send NACK to CM
+				//if(Boot_UpdateFWfromFile(&loaderfs, &loaderfile_MD, (uint8_t*)MD_FW_filename, BOOT_INTERNAL_FLASH, SUIT_MD_FW_ADDRESS) == BOOT_UPDATE_OK)
 
-		/* Write Addr : F/W App. Address + Info Address + SOME OTHER SECTOR*/
-		wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR + f_index;//SUIT_APP_FW_ADDRESS + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
+			}
+			break;
 
-	    uint8_t triggerWrite = 0;//for overwrite and only last chunk //1;//for padded //(f_index + wr_size >= fw_bin_size); // Trigger if last chunk
+		case Data_MSG:
+			if (Unpack_DataMsg(fnc_code, fdcan_rx_test_buf) < 0) {
+				//Error_Handler();
+			} else{
+				//Send NACK to CM
 
-	    if (IOIF_WriteFlashMassBuffered(wr_addr, &DATA_Rxbuf[f_index % sizeof(DATA_Rxbuf)], wr_size, triggerWrite) != IOIF_FLASH_STATUS_OK)
-	       {
-	           return BOOT_UPDATE_ERROR_FLASH_WRITE;
-	       }
+			}
+			break;
 
-		f_index += wr_size;
+		case EOT:
+			//No7
+			//receive EOT, do CRC on whole file
+			if(Unpack_EOT(fnc_code, fdcan_rx_test_buf)<0){
+				//Error_Handler();
+			} else{
+
+			}
+			break;
+
+		case TRIGGER:
+			if(Unpack_Trigger(fnc_code,fdcan_rx_test_buf)<0){
+
+			}
+			else{
+
+			}
+			break;
+
+
+		default: break;
+//		}
+	}
+
+//		uint32_t wr_addr = 0;
+
+//	    wr_size = 60;
+//
+//		/* Write Addr : F/W App. Address + Info Address + SOME OTHER SECTOR*/
+//		wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR + f_index;//SUIT_APP_FW_ADDRESS + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
+//
+//	    uint8_t triggerWrite = 0;//for overwrite and only last chunk //1;//for padded //(f_index + wr_size >= fw_bin_size); // Trigger if last chunk
+//
+//	    if (IOIF_WriteFlashMassBuffered(wr_addr, &DATA_Rxbuf[f_index % sizeof(DATA_Rxbuf)], wr_size, triggerWrite) != IOIF_FLASH_STATUS_OK)
+//	       {
+//	           return BOOT_UPDATE_ERROR_FLASH_WRITE;
+//	       }
+//
+//		f_index += wr_size;
 
 	return 0;
 }
@@ -502,7 +507,7 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 
 	//get CRC
 	t_infomsgcrc_compare = Calculate_CRC16(t_infomsgcrc_compare, t_buff, 0, 62);//sizeof(t_buff));
-	INFO_msgcrc_compare= t_infomsgcrc;//= t_infomsgcrc_compare;
+	INFO_msgcrc_compare= t_infomsgcrc_compare;
 
 	//Send ACK/NACK
 	uint8_t retrial=0;
@@ -548,7 +553,7 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		if(IOIF_TransmitFDCAN1(t_id, INFO_Txbuf, 64) != 0)
 			ret = 100;			// tx error
 
-		MD_Info_ACK_Flag = 1;
+		MD_Info_ACK_Flag++;// = 1;
 		return ret;
 	}
 	else{
@@ -579,8 +584,8 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		if(IOIF_TransmitFDCAN1(t_id, INFO_Txbuf, 64) != 0)
 			ret = 100;			// tx error
 
-		MD_Info_ACK_Flag = 0;
-
+//		MD_Info_ACK_Flag = 0;
+		MD_Info_NACK_Flag++;
 		return ret;
 	}
 	return ret;
@@ -679,7 +684,7 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 			ret = 100;			// tx error
 
 
-		MD_Data_ACK_Flag = 1;
+		MD_Data_ACK_Flag++;// = 1;
 
 		if(f_index==fw_bin_size){
 			f_index = 0;
@@ -714,7 +719,7 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		if(IOIF_TransmitFDCAN1(t_id, DATA_Txbuf, 64) != 0)
 			ret = 100;			// tx error
 
-		MD_Data_ACK_Flag = 0;
+		MD_Data_NACK_Flag ++;
 
 	}
 	return ret;
@@ -761,7 +766,7 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 			ret = 100;			// tx error
 
 		MD_Update_Flag = 0;
-		MD_EOT_ACK_Flag = 1;
+		MD_EOT_ACK_Flag ++;//= 1;
 
 	}
 	else{
@@ -789,7 +794,8 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 		if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
 			ret = 100;			// tx error
 
-		MD_EOT_ACK_Flag = 0;
+//		MD_EOT_ACK_Flag = 0;
+		MD_EOT_NACK_Flag++;// = 0;
 
 	}
 	TOTAL_filecrc=0;
@@ -898,7 +904,8 @@ int Send_STX(){
 	if(IOIF_TransmitFDCAN1(t_id, array , 8) != 0){
 		ret = 100;			// tx error
 	}
-	MD_STX_ACK_Flag = 1;
+//	MD_STX_ACK_Flag = 1;
+	MD_STX_ACK_Flag ++;//= 1;
 
 	return ret;
 }

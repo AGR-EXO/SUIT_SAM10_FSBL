@@ -116,8 +116,11 @@ typedef struct _fw_info_t
  */
 
 extern uint8_t MD_STX_ACK_Flag;
-extern uint8_t MD_Info_ACK_Flag;
-extern uint8_t MD_Data_ACK_Flag;
+extern uint8_t MD_STX_NACK_Flag;
+extern uint16_t MD_Info_ACK_Flag;
+extern uint16_t MD_Info_NACK_Flag;
+extern uint16_t MD_Data_ACK_Flag;
+extern uint16_t MD_Data_NACK_Flag;
 extern uint8_t MD_EOT_ACK_Flag;
 
 /**
