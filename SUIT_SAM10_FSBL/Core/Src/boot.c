@@ -329,7 +329,57 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
  *------------------------------------------------------------
  * @brief Functions intended for internal use within this module.
  */
+//void ReverseBytesWithinWords(uint8_t* buffer, uint32_t size) {
+//    for (uint32_t i = 0; i < size; i += 4) {
+//        if (i + 4 <= size) { // Ensure we don't go out of bounds
+//            uint8_t temp;
+//
+//            // Swap first and second bytes within the 4-byte word
+//            temp = buffer[i];
+//            buffer[i] = buffer[i + 1];
+//            buffer[i + 1] = temp;
+//
+//            // Swap third and fourth bytes within the 4-byte word
+//            temp = buffer[i + 2];
+//            buffer[i + 2] = buffer[i + 3];
+//            buffer[i + 3] = temp;
+//        }
+//    }
+//}
+//
+//
 
+void ProcessReceivedData(uint8_t* buffer, uint32_t size) {
+    if (size != 64) {
+        // Ensure the buffer is exactly 64 bytes
+        return;
+    }
+
+    // 1. Invert the first 2 bytes
+    uint8_t temp = buffer[0];
+    buffer[0] = buffer[1];
+    buffer[1] = temp;
+
+    // 2. Invert every 4 bytes from index 2 to 61
+    for (uint32_t i = 2; i < 62; i += 4) {
+        // Ensure we don't go out of bounds
+        if (i + 3 < 62) {
+            // Swap byte 0 ↔ byte 3 and byte 1 ↔ byte 2 within the 4-byte word
+            temp = buffer[i];
+            buffer[i] = buffer[i + 3];
+            buffer[i + 3] = temp;
+
+            temp = buffer[i + 1];
+            buffer[i + 1] = buffer[i + 2];
+            buffer[i + 2] = temp;
+        }
+    }
+
+    // 3. Invert the last 2 bytes (index 62 and 63)
+    temp = buffer[62];
+    buffer[62] = buffer[63];
+    buffer[63] = temp;
+}
 
 
 static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
@@ -343,6 +393,8 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 
 //	if(MD_STX_ACK_Flag == 1){
 		memcpy(fdcan_rx_test_buf, rx_pData, 64);
+
+//		ProcessReceivedData(fdcan_rx_test_buf, 64);
 
 		switch (fnc_code){
 		case FW_UPDATE:
@@ -410,11 +462,11 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 
 	memcpy(&t_file_size, &t_buff[t_cursor],sizeof(t_file_size));
 	t_cursor += sizeof(t_file_size);
-	INFO_filesize = 4248289;//t_file_size;//
+	INFO_filesize =t_file_size;//4248289;//
 
 	memcpy(&t_start_addr_offset, &t_buff[t_cursor],sizeof(t_start_addr_offset));
 	t_cursor += sizeof(t_start_addr_offset);
-	INFO_startaddroffset = 64;//t_start_addr_offset;//
+	INFO_startaddroffset = t_start_addr_offset;//64;//
 
 	memcpy(&t_file_crc, &t_buff[t_cursor],sizeof(t_file_crc));
 	t_cursor += sizeof(t_file_crc);
@@ -422,7 +474,7 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 
 	memcpy(&t_total_data_index, &t_buff[t_cursor],sizeof(t_total_data_index));
 	t_cursor += sizeof(t_total_data_index);
-	INFO_totaldataindex = 4381;//t_total_data_index;//
+	INFO_totaldataindex = t_total_data_index;//4381;//
 
 	t_cursor += 50;
 	memcpy(&t_infomsgcrc, &t_buff[t_cursor],sizeof(t_infomsgcrc));
@@ -652,86 +704,87 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 int totalCRC_flash=0;
 uint16_t EOT_TotalMSGCRC=0;
 static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
-//	int ret=0;
-//
-//	//No8
-//	//if CRC ok ACK, else NACK send
-//	uint8_t retrial=0;
-//	int t_cursor = 0;
-//
-//	uint16_t t_eotmsgcrc=0;
-//
-//	memcpy(&t_eotmsgcrc, &t_buf[t_cursor],sizeof(t_eotmsgcrc));
-//	t_cursor += sizeof(t_eotmsgcrc);
-//	EOT_TotalMSGCRC = t_eotmsgcrc;
-//
-//
-//	if(EOT_TotalMSGCRC == TOTAL_filecrc){
-////	if(INFO_filecrc == TOTAL_filecrc){
-//
-//	int cursor2=0;
-//		//Send ACK
-//		//first data frame is index 0 or 1???
-//		uint16_t next_idx=1;//DATA_FRAME_IDX_1
-//		memcpy(&EOT_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
-//		cursor2+=sizeof(t_fnccode);
-//
-//		memcpy(&EOT_Txbuf[cursor2], &next_idx, sizeof(next_idx));
-//		cursor2+=sizeof(next_idx);
-//
-//		int idx=64-cursor2;
-//
-//		memset(&EOT_Txbuf[cursor2],0, idx);//61
-//		cursor2+=idx;//61;
-//
-//		uint16_t t_id = ACK | (cm_node_id << 4) ;
-//
-//		if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
-//			ret = 100;			// tx error
-//
-//		MD_Update_Flag = 0;
-//		MD_EOT_ACK_Flag = 1;
-//
-//	}
-//	else{
-//		//Send NACK
-//		int cursor2=0;
-//		//first data frame is index 0 or 1???
-//		uint16_t curr_idx=0; //INFO_FRAME_IDX_0
-//		memcpy(&EOT_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
-//		cursor2+=sizeof(t_fnccode);
-//
-//		memcpy(&EOT_Txbuf[cursor2], &curr_idx, sizeof(curr_idx));
-//		cursor2+=sizeof(curr_idx);
-//
-//		memcpy(&EOT_Txbuf[cursor2], &retrial, sizeof(retrial));
-//		cursor2+=sizeof(retrial);
-//
-//		retrial++;
-//
-//		int idx=64-cursor2;
-//		memset(&EOT_Txbuf[cursor2], 0, idx);//60
-//		cursor2+=idx;//60
-//
-//		uint16_t t_id = NACK | (cm_node_id << 4) ;
-//
-//		if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
-//			ret = 100;			// tx error
-//
-//		MD_EOT_ACK_Flag = 0;
-//
-//	}
-//	TOTAL_filecrc=0;
-//	return ret;
+	int ret=0;
 
-	uint32_t startAddress = IOIF_FLASH_SECTOR_5_BANK1_ADDR;
+	//No8
+	//if CRC ok ACK, else NACK send
+	uint8_t retrial=0;
+	int t_cursor = 0;
+
+	uint16_t t_eotmsgcrc=0;
+
+	memcpy(&t_eotmsgcrc, &t_buf[t_cursor],sizeof(t_eotmsgcrc));
+	t_cursor += sizeof(t_eotmsgcrc);
+	EOT_TotalMSGCRC = t_eotmsgcrc;
 
 
-	 totalCRC_flash =ReadFlashAndCalculateCRC(startAddress,f_index);
+	if(EOT_TotalMSGCRC == TOTAL_filecrc){
+//	if(INFO_filecrc == TOTAL_filecrc){
 
+	int cursor2=0;
+		//Send ACK
+		//first data frame is index 0 or 1???
+		uint16_t next_idx=1;//DATA_FRAME_IDX_1
+		memcpy(&EOT_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
+		cursor2+=sizeof(t_fnccode);
+
+		memcpy(&EOT_Txbuf[cursor2], &next_idx, sizeof(next_idx));
+		cursor2+=sizeof(next_idx);
+
+		int idx=64-cursor2;
+
+		memset(&EOT_Txbuf[cursor2],0, idx);//61
+		cursor2+=idx;//61;
+
+		uint16_t t_id = ACK | (cm_node_id << 4) ;
+
+		if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
+			ret = 100;			// tx error
+
+		MD_Update_Flag = 0;
+		MD_EOT_ACK_Flag = 1;
+
+	}
+	else{
+		//Send NACK
+		int cursor2=0;
+		//first data frame is index 0 or 1???
+		uint16_t curr_idx=0; //INFO_FRAME_IDX_0
+		memcpy(&EOT_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
+		cursor2+=sizeof(t_fnccode);
+
+		memcpy(&EOT_Txbuf[cursor2], &curr_idx, sizeof(curr_idx));
+		cursor2+=sizeof(curr_idx);
+
+		memcpy(&EOT_Txbuf[cursor2], &retrial, sizeof(retrial));
+		cursor2+=sizeof(retrial);
+
+		retrial++;
+
+		int idx=64-cursor2;
+		memset(&EOT_Txbuf[cursor2], 0, idx);//60
+		cursor2+=idx;//60
+
+		uint16_t t_id = NACK | (cm_node_id << 4) ;
+
+		if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
+			ret = 100;			// tx error
+
+		MD_EOT_ACK_Flag = 0;
+
+	}
+	TOTAL_filecrc=0;
+	return ret;
+
+//	uint32_t startAddress = IOIF_FLASH_SECTOR_5_BANK1_ADDR;
+//
+//
+//	 totalCRC_flash =ReadFlashAndCalculateCRC(startAddress,f_index);
+//
 
 }
-uint16_t packetCRC=0;
+
+//uint16_t packetCRC=0;
 //int ReadFlashAndCalculateCRC(uint32_t startAddress, uint32_t dataSize) {
 //    uint8_t buffer[60]; // 60-byte buffer
 //    int totalCRC = 0;
