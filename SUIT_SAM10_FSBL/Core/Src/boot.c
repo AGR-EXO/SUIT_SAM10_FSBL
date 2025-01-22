@@ -87,7 +87,7 @@ uint16_t INFO_msgcrc;// (current)
 uint16_t INFO_msgcrc_compare;// (current)
 
 uint8_t INFO_Txbuf[64]={0,};
-uint8_t INFO_Savebuf[64]={0,};
+uint8_t INFO_Rxbuf[64]={0,};
 
 int TOTAL_filecrc=0;
 int TOTAL_filesize=0;
@@ -135,6 +135,7 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff);
 static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff);
 static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf);
 static int Unpack_Trigger(uint32_t t_fnccode, uint8_t* t_buf);
+int Send_NACK(uint16_t reqframe_idx, uint8_t retrial);
 
 /**
  *------------------------------------------------------------
@@ -353,42 +354,88 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
 //
 //
 
+//void ProcessReceivedData(uint8_t* buffer, uint32_t size) {
+//    if (size != 64) {
+//        // Ensure the buffer is exactly 64 bytes
+//        return;
+//    }
+//
+//    // 1. Invert the first 2 bytes
+//    uint8_t temp = buffer[0];
+//    buffer[0] = buffer[1];
+//    buffer[1] = temp;
+//
+//    // 2. Invert every 4 bytes from index 2 to 61
+//    for (uint32_t i = 2; i < 62; i += 4) {
+//        // Ensure we don't go out of bounds
+//        if (i + 3 < 62) {
+//            // Swap byte 0 ↔ byte 3 and byte 1 ↔ byte 2 within the 4-byte word
+//            temp = buffer[i];
+//            buffer[i] = buffer[i + 3];
+//            buffer[i + 3] = temp;
+//
+//            temp = buffer[i + 1];
+//            buffer[i + 1] = buffer[i + 2];
+//            buffer[i + 2] = temp;
+//        }
+//    }
+//
+//    // 3. Invert the last 2 bytes (index 62 and 63)
+//    temp = buffer[62];
+//    buffer[62] = buffer[63];
+//    buffer[63] = temp;
+//}
+
+
+//INFO MSG
 void ProcessReceivedData(uint8_t* buffer, uint32_t size) {
     if (size != 64) {
         // Ensure the buffer is exactly 64 bytes
         return;
     }
 
-    // 1. Invert the first 2 bytes
-    uint8_t temp = buffer[0];
-    buffer[0] = buffer[1];
-    buffer[1] = temp;
+    uint8_t temp;
 
-    // 2. Invert every 4 bytes from index 2 to 61
-    for (uint32_t i = 2; i < 62; i += 4) {
-        // Ensure we don't go out of bounds
-        if (i + 3 < 62) {
-            // Swap byte 0 ↔ byte 3 and byte 1 ↔ byte 2 within the 4-byte word
-            temp = buffer[i];
-            buffer[i] = buffer[i + 3];
-            buffer[i + 3] = temp;
+    // 1. Swap the first 4 bytes
+    temp = buffer[0];
+    buffer[0] = buffer[3];
+    buffer[3] = temp;
 
-            temp = buffer[i + 1];
-            buffer[i + 1] = buffer[i + 2];
-            buffer[i + 2] = temp;
-        }
-    }
+    temp = buffer[1];
+    buffer[1] = buffer[2];
+    buffer[2] = temp;
 
-    // 3. Invert the last 2 bytes (index 62 and 63)
+    // 2. Swap the next 4 bytes (index 4 to 7)
+    temp = buffer[4];
+    buffer[4] = buffer[7];
+    buffer[7] = temp;
+
+    temp = buffer[5];
+    buffer[5] = buffer[6];
+    buffer[6] = temp;
+
+    // 3. Swap the next 2 bytes (index 8 and 9)
+    temp = buffer[8];
+    buffer[8] = buffer[9];
+    buffer[9] = temp;
+
+    // 4. Swap the next 2 bytes (index 10 and 11)
+    temp = buffer[10];
+    buffer[10] = buffer[11];
+    buffer[11] = temp;
+
+    // 5. Swap the last 2 bytes (index 62 and 63)
     temp = buffer[62];
     buffer[62] = buffer[63];
     buffer[63] = temp;
 }
 
 
+uint8_t stx_cnt=0;
+int cb_cnt=0;
 static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 {
-
+	cb_cnt++;
 	// Extract origin node (upper byte)
 //	ori_node = (id & 0x0f0) >> 4;
 	ori_node = (id >> 4) & 0x0F; // Shift right by 4 bits and mask with 0x0F
@@ -397,18 +444,27 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 	fnc_code = id & 0x700;   // Mask with 0x0F to get the lower nibble
 
 //	if(MD_STX_ACK_Flag == 1){
-		memcpy(fdcan_rx_test_buf, rx_pData, 64);
+	memcpy(fdcan_rx_test_buf, rx_pData, 64);
 
-//		memcpy(DATA_Rxbuf, &fdcan_rx_test_buf[2], 60);
-
-//		ProcessReceivedData(fdcan_rx_test_buf, 64);
 
 		switch (fnc_code){
 		case FW_UPDATE:
 			Send_STX();
 			break;
 
+		case NACK:
+			if(stx_cnt<3){
+				Send_STX();
+				stx_cnt++;
+			}
+			else{
+				Send_NACK(0, stx_cnt);//STX
+				stx_cnt=0;
+			}
+			break;
+
 		case Info_MSG:
+
 			if (Unpack_InfoMsg(fnc_code, fdcan_rx_test_buf) < 0) {
 				//Error_Handler();
 			} else{
@@ -451,6 +507,8 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 //		}
 	}
 
+//		memcpy(DATA_Rxbuf, &fdcan_rx_test_buf[2], 60);
+
 //		uint32_t wr_addr = 0;
 
 //	    wr_size = 60;
@@ -471,7 +529,6 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 }
 
 //No3
-
 static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
     int ret=0;
     int t_cursor = 0;
@@ -483,6 +540,10 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	//nothing for 50 byte
 	uint16_t t_infomsgcrc;// (current)
 	uint16_t t_infomsgcrc_compare=0;// (current)
+
+
+//	memcpy(&INFO_Rxbuf, &t_buff[t_cursor],sizeof(INFO_Rxbuf));
+	ProcessReceivedData(t_buff, 64);
 
 	memcpy(&t_file_size, &t_buff[t_cursor],sizeof(t_file_size));
 	t_cursor += sizeof(t_file_size);
@@ -502,11 +563,13 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 
 	t_cursor += 50;
 	memcpy(&t_infomsgcrc, &t_buff[t_cursor],sizeof(t_infomsgcrc));
+//    t_infomsgcrc= ((uint16_t)t_buff[t_cursor] << 8) | t_buff[t_cursor+1];
 	t_cursor += sizeof(t_infomsgcrc);
 	INFO_msgcrc = t_infomsgcrc;
 
 	//get CRC
-	t_infomsgcrc_compare = Calculate_CRC16(t_infomsgcrc_compare, t_buff, 0, 62);//sizeof(t_buff));
+	t_infomsgcrc_compare = Calculate_CRC16(t_infomsgcrc_compare, t_buff, 0, 62);
+//	t_infomsgcrc_compare = Calculate_CRC16(t_infomsgcrc_compare, INFO_Rxbuf, 0, 62);//sizeof(t_buff));
 	INFO_msgcrc_compare= t_infomsgcrc_compare;
 
 	//Send ACK/NACK
@@ -548,7 +611,7 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		memset(&INFO_Txbuf[cursor2], 0, idx);//61
 		cursor2+=idx;//61;
 
-		uint16_t t_id = ACK | (cm_node_id << 4) ;
+		uint16_t t_id = ACK | (MD_nodeID << 4) ;
 
 		if(IOIF_TransmitFDCAN1(t_id, INFO_Txbuf, 64) != 0)
 			ret = 100;			// tx error
@@ -560,8 +623,6 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		//Send NACK
 		/* 2. Send Msg */
 		int cursor2=0;
-		//Send ACK
-		/* 2. Send Msg */
 		//first data frame is index 0 or 1???
 		uint16_t curr_idx=0; //INFO_FRAME_IDX_0
 		memcpy(&INFO_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
@@ -579,7 +640,7 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		memset(&INFO_Txbuf[cursor2], 0, idx);//60
 		cursor2+=idx;//60
 
-		uint16_t t_id = NACK | (cm_node_id << 4) ;
+		uint16_t t_id = NACK | (MD_nodeID << 4) ;
 
 		if(IOIF_TransmitFDCAN1(t_id, INFO_Txbuf, 64) != 0)
 			ret = 100;			// tx error
@@ -610,8 +671,10 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	t_cursor += sizeof(DATA_Rxbuf);
 
 	memcpy(&t_datamsgcrc, &t_buff[t_cursor],sizeof(t_datamsgcrc));
+//	t_datamsgcrc= ((uint16_t)t_buff[t_cursor] << 8) | t_buff[t_cursor+1];
 	t_cursor += sizeof(t_datamsgcrc);
 	DATA_msgcrc=t_datamsgcrc;
+
 	//get CRC
 	t_datamsgcrc_compare = Calculate_CRC16(t_datamsgcrc_compare, DATA_Rxbuf, 0, sizeof(DATA_Rxbuf));//sizeof(t_buff));
 	DATA_msgcrc_compare=t_datamsgcrc_compare;
@@ -621,6 +684,8 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	uint8_t retrial=0;
 
 	if(DATA_msgcrc == DATA_msgcrc_compare){
+//		DATA_msgcrc_compare=0;
+		t_datamsgcrc_compare=0;
 		TOTAL_filecrc+=DATA_msgcrc;
 		//Write in flash sector for new fw
 		/* 2-2. File Read and Flash Write */
@@ -646,7 +711,7 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 			/* Write Addr : F/W App. Address + Info Address + SOME OTHER SECTOR*/
 			wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR + f_index;//SUIT_APP_FW_ADDRESS + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
 
-		    uint8_t triggerWrite = 0;//for overwrite and only last chunk //1;//for padded //(f_index + wr_size >= fw_bin_size); // Trigger if last chunk
+		    uint8_t triggerWrite = (f_index + wr_size >= fw_bin_size); // Trigger if last chunk////0//for overwrite and only last chunk //1;//for padded //
 
 		    if (IOIF_WriteFlashMassBuffered(wr_addr, &DATA_Rxbuf[f_index % sizeof(DATA_Rxbuf)], wr_size, triggerWrite) != IOIF_FLASH_STATUS_OK)
 		       {
@@ -678,7 +743,7 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		memset(&DATA_Txbuf[cursor2], 0, idx);//61
 		cursor2+=idx;//61;
 
-		uint16_t t_id = ACK | (cm_node_id << 4) ;
+		uint16_t t_id = ACK | (MD_nodeID << 4) ;
 
 		if(IOIF_TransmitFDCAN1(t_id, DATA_Txbuf, 64) != 0)
 			ret = 100;			// tx error
@@ -692,6 +757,8 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		}
 	}
 	else{
+//		DATA_msgcrc_compare=0;
+		t_datamsgcrc_compare=0;
 		//Send NACK
 		/* 2. Send Msg */
 		int cursor2=0;
@@ -714,7 +781,7 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		memset(&DATA_Txbuf[cursor2], 0, idx);//60
 		cursor2+=idx;//60
 
-		uint16_t t_id = NACK | (cm_node_id << 4) ;
+		uint16_t t_id = NACK | (MD_nodeID << 4) ;
 
 		if(IOIF_TransmitFDCAN1(t_id, DATA_Txbuf, 64) != 0)
 			ret = 100;			// tx error
@@ -760,7 +827,7 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 		memset(&EOT_Txbuf[cursor2],0, idx);//61
 		cursor2+=idx;//61;
 
-		uint16_t t_id = ACK | (cm_node_id << 4) ;
+		uint16_t t_id = ACK | (MD_nodeID << 4) ;
 
 		if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
 			ret = 100;			// tx error
@@ -789,7 +856,7 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 		memset(&EOT_Txbuf[cursor2], 0, idx);//60
 		cursor2+=idx;//60
 
-		uint16_t t_id = NACK | (cm_node_id << 4) ;
+		uint16_t t_id = NACK | (MD_nodeID << 4) ;
 
 		if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
 			ret = 100;			// tx error
@@ -879,8 +946,8 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 //    return totalCRC;
 //}
 static int Unpack_Trigger(uint32_t t_fnccode, uint8_t* t_buf){
+	int ret = 0;
 	uint32_t wr_addr = 0;
-
     uint8_t triggerWrite = 1;//(f_index + wr_size >= fw_bin_size); // Trigger if last chunk
 	wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR + f_index;//SUIT_APP_FW_ADDRESS + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
 
@@ -888,9 +955,7 @@ static int Unpack_Trigger(uint32_t t_fnccode, uint8_t* t_buf){
        {
            return BOOT_UPDATE_ERROR_FLASH_WRITE;
        }
-
-
-
+    return ret;
 }
 
 
@@ -908,4 +973,35 @@ int Send_STX(){
 	MD_STX_ACK_Flag ++;//= 1;
 
 	return ret;
+}
+
+
+int Send_NACK(uint16_t reqframe_idx, uint8_t retrial){
+	int ret = 0;
+	//Send NACK
+	int cursor2=0;
+	int t_fnccode = NACK;
+	//first data frame is index 0 or 1???
+	memcpy(&STX_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
+	cursor2+=sizeof(t_fnccode);
+
+	memcpy(&STX_Txbuf[cursor2], &reqframe_idx, sizeof(reqframe_idx));
+	cursor2+=sizeof(reqframe_idx);
+
+	memcpy(&STX_Txbuf[cursor2], &retrial, sizeof(retrial));
+	cursor2+=sizeof(retrial);
+
+	retrial++;
+
+	int idx=64-cursor2;
+	memset(&STX_Txbuf[cursor2], 0, idx);//60
+	cursor2+=idx;//60
+
+	uint16_t t_id = NACK | (MD_nodeID << 4) ;
+
+	if(IOIF_TransmitFDCAN1(t_id, STX_Txbuf, 64) != 0)
+		ret = 100;			// tx error
+
+	return ret;
+
 }
