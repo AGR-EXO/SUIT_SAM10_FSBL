@@ -388,47 +388,94 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
 
 
 //INFO MSG
-void ProcessReceivedData(uint8_t* buffer, uint32_t size) {
+//void ProcessReceivedData(uint8_t* buffer, uint32_t size) {
+//    if (size != 64) {
+//        // Ensure the buffer is exactly 64 bytes
+//        return;
+//    }
+//
+//    uint8_t temp;
+//
+//    // 1. Swap the first 4 bytes
+//    temp = buffer[0];
+//    buffer[0] = buffer[3];
+//    buffer[3] = temp;
+//
+//    temp = buffer[1];
+//    buffer[1] = buffer[2];
+//    buffer[2] = temp;
+//
+//    // 2. Swap the next 4 bytes (index 4 to 7)
+//    temp = buffer[4];
+//    buffer[4] = buffer[7];
+//    buffer[7] = temp;
+//
+//    temp = buffer[5];
+//    buffer[5] = buffer[6];
+//    buffer[6] = temp;
+//
+//    // 3. Swap the next 2 bytes (index 8 and 9)
+//    temp = buffer[8];
+//    buffer[8] = buffer[9];
+//    buffer[9] = temp;
+//
+//    // 4. Swap the next 2 bytes (index 10 and 11)
+//    temp = buffer[10];
+//    buffer[10] = buffer[11];
+//    buffer[11] = temp;
+//
+//    // 5. Swap the last 2 bytes (index 62 and 63)
+//    temp = buffer[62];
+//    buffer[62] = buffer[63];
+//    buffer[63] = temp;
+//}
+
+
+void ProcessReceivedData(const uint8_t* buffer, uint8_t* output_buffer, uint32_t size) {
     if (size != 64) {
         // Ensure the buffer is exactly 64 bytes
         return;
     }
 
+    // Copy the original buffer into the output buffer
+    memcpy(output_buffer, buffer, size);
+
     uint8_t temp;
 
     // 1. Swap the first 4 bytes
-    temp = buffer[0];
-    buffer[0] = buffer[3];
-    buffer[3] = temp;
+    temp = output_buffer[0];
+    output_buffer[0] = output_buffer[3];
+    output_buffer[3] = temp;
 
-    temp = buffer[1];
-    buffer[1] = buffer[2];
-    buffer[2] = temp;
+    temp = output_buffer[1];
+    output_buffer[1] = output_buffer[2];
+    output_buffer[2] = temp;
 
     // 2. Swap the next 4 bytes (index 4 to 7)
-    temp = buffer[4];
-    buffer[4] = buffer[7];
-    buffer[7] = temp;
+    temp = output_buffer[4];
+    output_buffer[4] = output_buffer[7];
+    output_buffer[7] = temp;
 
-    temp = buffer[5];
-    buffer[5] = buffer[6];
-    buffer[6] = temp;
+    temp = output_buffer[5];
+    output_buffer[5] = output_buffer[6];
+    output_buffer[6] = temp;
 
     // 3. Swap the next 2 bytes (index 8 and 9)
-    temp = buffer[8];
-    buffer[8] = buffer[9];
-    buffer[9] = temp;
+    temp = output_buffer[8];
+    output_buffer[8] = output_buffer[9];
+    output_buffer[9] = temp;
 
     // 4. Swap the next 2 bytes (index 10 and 11)
-    temp = buffer[10];
-    buffer[10] = buffer[11];
-    buffer[11] = temp;
+    temp = output_buffer[10];
+    output_buffer[10] = output_buffer[11];
+    output_buffer[11] = temp;
 
     // 5. Swap the last 2 bytes (index 62 and 63)
-    temp = buffer[62];
-    buffer[62] = buffer[63];
-    buffer[63] = temp;
+    temp = output_buffer[62];
+    output_buffer[62] = output_buffer[63];
+    output_buffer[63] = temp;
 }
+
 
 
 uint8_t stx_cnt=0;
@@ -529,6 +576,7 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 }
 
 //No3
+uint8_t INFO_outputBuff[64]={0,};
 static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
     int ret=0;
     int t_cursor = 0;
@@ -542,34 +590,35 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	uint16_t t_infomsgcrc_compare=0;// (current)
 
 
-	memcpy(&INFO_Rxbuf, &t_buff[t_cursor],sizeof(INFO_Rxbuf));
-	ProcessReceivedData(t_buff, 64);
+//	memcpy(&INFO_Rxbuf, &t_buff[t_cursor],sizeof(INFO_Rxbuf));
+//	ProcessReceivedData(t_buff, 64);
+	ProcessReceivedData(t_buff, INFO_outputBuff, 64);
 
-	memcpy(&t_file_size, &t_buff[t_cursor],sizeof(t_file_size));
+	memcpy(&t_file_size, &INFO_outputBuff[t_cursor],sizeof(t_file_size));
 	t_cursor += sizeof(t_file_size);
 	INFO_filesize =t_file_size;//4248289;//
 
-	memcpy(&t_start_addr_offset, &t_buff[t_cursor],sizeof(t_start_addr_offset));
+	memcpy(&t_start_addr_offset, &INFO_outputBuff[t_cursor],sizeof(t_start_addr_offset));
 	t_cursor += sizeof(t_start_addr_offset);
 	INFO_startaddroffset = t_start_addr_offset;//64;//
 
-	memcpy(&t_file_crc, &t_buff[t_cursor],sizeof(t_file_crc));
+	memcpy(&t_file_crc, &INFO_outputBuff[t_cursor],sizeof(t_file_crc));
 	t_cursor += sizeof(t_file_crc);
 	INFO_filecrc = t_file_crc;
 
-	memcpy(&t_total_data_index, &t_buff[t_cursor],sizeof(t_total_data_index));
+	memcpy(&t_total_data_index, &INFO_outputBuff[t_cursor],sizeof(t_total_data_index));
 	t_cursor += sizeof(t_total_data_index);
 	INFO_totaldataindex = t_total_data_index;//4381;//
 
 	t_cursor += 50;
-	memcpy(&t_infomsgcrc, &t_buff[t_cursor],sizeof(t_infomsgcrc));
+	memcpy(&t_infomsgcrc, &INFO_outputBuff[t_cursor],sizeof(t_infomsgcrc));
 //    t_infomsgcrc= ((uint16_t)t_buff[t_cursor] << 8) | t_buff[t_cursor+1];
 	t_cursor += sizeof(t_infomsgcrc);
 	INFO_msgcrc = t_infomsgcrc;
 
 	//get CRC
-//	t_infomsgcrc_compare = Calculate_CRC16(t_infomsgcrc_compare, t_buff, 0, 62);
-	t_infomsgcrc_compare = Calculate_CRC16(t_infomsgcrc_compare, INFO_Rxbuf, 0, 62);//sizeof(t_buff));
+	t_infomsgcrc_compare = Calculate_CRC16(t_infomsgcrc_compare, t_buff, 0, 62);
+//	t_infomsgcrc_compare = Calculate_CRC16(t_infomsgcrc_compare, INFO_Rxbuf, 0, 62);//sizeof(t_buff));
 	INFO_msgcrc_compare= t_infomsgcrc_compare;
 
 	//Send ACK/NACK
@@ -655,6 +704,8 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 
 //No5
 uint8_t DATA_triggerWrite=0;
+static uint16_t expected_index = 0; // Keep track of the expected index (starting at 0)
+
 static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	int ret=0;
 	int t_cursor = 0;
@@ -666,6 +717,49 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	memcpy(&t_dataindexnumber, &t_buff[t_cursor],sizeof(t_dataindexnumber));
 	t_cursor += sizeof(t_dataindexnumber);
 	DATA_indexnumber=t_dataindexnumber;
+
+
+    // Check if the received index is not the expected index
+    if (t_dataindexnumber != expected_index) {
+        // Send NACK if the index is out of order
+        int cursor2 = 0;
+        uint8_t retrial = 0;
+
+        uint16_t curr_idx = expected_index; // Report the expected index in the NACK
+        memcpy(&DATA_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
+        cursor2 += sizeof(t_fnccode);
+
+        memcpy(&DATA_Txbuf[cursor2], &curr_idx, sizeof(curr_idx));
+        cursor2 += sizeof(curr_idx);
+
+        memcpy(&DATA_Txbuf[cursor2], &retrial, sizeof(retrial));
+        cursor2 += sizeof(retrial);
+
+        retrial++;
+
+        int idx = 64 - cursor2;
+        memset(&DATA_Txbuf[cursor2], 0, idx); // Pad with zeros
+        cursor2 += idx;
+
+        uint16_t t_id = NACK | (MD_nodeID << 4);
+
+        if (IOIF_TransmitFDCAN1(t_id, DATA_Txbuf, 64) != 0) {
+            ret = 100; // TX error
+        }
+
+        MD_Data_NACK_Flag++;
+        return ret; // Exit the function after sending NACK
+    }
+
+    // Update the expected index for the next iteration
+    expected_index = t_dataindexnumber + 1;
+
+
+
+
+
+
+
 
 	memcpy(&DATA_Rxbuf, &t_buff[t_cursor],sizeof(DATA_Rxbuf));
 	t_cursor += sizeof(DATA_Rxbuf);
@@ -697,7 +791,6 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 			wr_size = 0;
 			uint32_t wr_addr = 0;
 
-//			wr_addr = f_index;
 //			wr_size = ((fw_bin_size-f_index) < 0) ? 0 : ((fw_bin_size-f_index > 60) ? 60 : fw_bin_size-f_index);
 
 			if (fw_bin_size - f_index < 0) {
@@ -717,12 +810,6 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		       {
 		           return BOOT_UPDATE_ERROR_FLASH_WRITE;
 		       }
-
-//			if(IOIF_WriteFlashMass(wr_addr, DATA_Rxbuf, wr_size)!=IOIF_FLASH_STATUS_OK)// wr_size) != IOIF_FLASH_STATUS_OK)
-//			{
-//				return ret = BOOT_UPDATE_ERROR_FLASH_WRITE;
-//			}
-
 			f_index += wr_size;
 			break;
 		}
