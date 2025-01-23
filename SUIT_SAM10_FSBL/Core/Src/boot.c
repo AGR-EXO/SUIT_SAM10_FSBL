@@ -108,6 +108,10 @@ uint32_t wr_size;
 uint32_t fw_bin_size =0;
 uint32_t f_index = 0;
 
+uint8_t DATA_triggerWrite=0;
+static uint16_t expected_index = 0; // Keep track of the expected index (starting at 0)
+uint8_t DATA_WriteDone=0;
+
 uint8_t EOT_Txbuf[64]={0,};
 
 uint8_t STX_Txbuf[64]={0,};
@@ -174,6 +178,11 @@ BootUpdateState Boot_CheckUpdateMode(void)
 		return ret = BOOT_MD_UPDATE;
 	}
 
+	//End
+	if(DATA_WriteDone==1){
+		DATA_WriteDone = 0;
+		return ret = BOOT_NORMAL;
+	}
 	return ret;
 }
 
@@ -183,18 +192,18 @@ BootUpdateError Boot_JumpToApp(void)
 	BootUpdateError ret = BOOT_UPDATE_OK;
 
 	/* 1. Verifying Application FW before jump */
-//	ret = Boot_UpdateVerify((uint32_t)SUIT_APP_FW_ADDRESS);
+//	ret = Boot_UpdateVerify((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR);
 
 	/* 2. Jump to App. FW */
 	if(ret == BOOT_UPDATE_OK)
 	{
 		void (*SysMemBootJump)(void);
-		SysMemBootJump = (void (*)(void)) (*((uint32_t *) ((SUIT_APP_FW_ADDRESS + 4))));//+4bytes worth of interrupt vector at first //+ SUIT_APP_FW_INFO_SIZE + 4))));
+		SysMemBootJump = (void (*)(void)) (*((uint32_t *) ((IOIF_FLASH_SECTOR_5_BANK1_ADDR + 4))));//+4bytes worth of interrupt vector at first //+ SUIT_APP_FW_INFO_SIZE + 4))));
 
 		Boot_AllDev_DeInit();
 
-		__set_MSP(*(uint32_t*)SUIT_APP_FW_ADDRESS);// + SUIT_APP_FW_INFO_SIZE);
-		SCB->VTOR = SUIT_APP_FW_ADDRESS;// + SUIT_APP_FW_INFO_SIZE;
+		__set_MSP(*(uint32_t*)IOIF_FLASH_SECTOR_5_BANK1_ADDR);// + SUIT_APP_FW_INFO_SIZE);
+		SCB->VTOR = IOIF_FLASH_SECTOR_5_BANK1_ADDR;// + SUIT_APP_FW_INFO_SIZE;
 
 		SysMemBootJump();
 	}
@@ -561,7 +570,7 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 //	    wr_size = 60;
 //
 //		/* Write Addr : F/W App. Address + Info Address + SOME OTHER SECTOR*/
-//		wr_addr = IOIF_FLASH_SECTOR_2_BANK1_ADDR + f_index;//SUIT_APP_FW_ADDRESS + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
+//		wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR+  f_index;//IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
 //
 //	    uint8_t triggerWrite = 0;//for overwrite and only last chunk //1;//for padded //(f_index + wr_size >= fw_bin_size); // Trigger if last chunk
 //
@@ -632,7 +641,7 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		uint8_t erase_sector = (INFO_filesize + SUIT_APP_FW_INFO_SIZE) / (uint32_t) STM32H743_IFLASH_SECTOR_SIZE + 1;
 		while(sector_idx < erase_sector)
 		{
-			if(IOIF_EraseFlash(IOIF_FLASH_SECTOR_2_BANK1_ADDR + (sector_idx * STM32H743_IFLASH_SECTOR_SIZE), false) != IOIF_FLASH_STATUS_OK)
+			if(IOIF_EraseFlash(IOIF_FLASH_SECTOR_5_BANK1_ADDR + (sector_idx * STM32H743_IFLASH_SECTOR_SIZE), false) != IOIF_FLASH_STATUS_OK)
 			{
 				return ret = BOOT_UPDATE_ERROR_FLASH_ERASE;
 			}
@@ -703,8 +712,6 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 
 
 //No5
-uint8_t DATA_triggerWrite=0;
-static uint16_t expected_index = 0; // Keep track of the expected index (starting at 0)
 
 static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	int ret=0;
@@ -802,7 +809,7 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 			}
 
 			/* Write Addr : F/W App. Address + Info Address + SOME OTHER SECTOR*/
-			wr_addr = IOIF_FLASH_SECTOR_2_BANK1_ADDR + f_index;//SUIT_APP_FW_ADDRESS + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
+			wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR+  f_index;//IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
 
 		    uint8_t triggerWrite = (f_index + wr_size >= fw_bin_size); // Trigger if last chunk////0//for overwrite and only last chunk //1;//for padded //
 		    DATA_triggerWrite=triggerWrite;
@@ -811,6 +818,11 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		           return BOOT_UPDATE_ERROR_FLASH_WRITE;
 		       }
 			f_index += wr_size;
+
+			if(triggerWrite==1){
+				MD_Update_Flag=0;
+				DATA_WriteDone=1;
+			}
 			break;
 		}
 
@@ -955,7 +967,7 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 	TOTAL_filecrc=0;
 	return ret;
 
-//	uint32_t startAddress = IOIF_FLASH_SECTOR_2_BANK1_ADDR;
+//	uint32_t startAddress = IOIF_FLASH_SECTOR_5_BANK1_ADDR;
 //
 //
 //	 totalCRC_flash =ReadFlashAndCalculateCRC(startAddress,f_index);
@@ -1036,7 +1048,7 @@ static int Unpack_Trigger(uint32_t t_fnccode, uint8_t* t_buf){
 	int ret = 0;
 	uint32_t wr_addr = 0;
     uint8_t triggerWrite = 1;//(f_index + wr_size >= fw_bin_size); // Trigger if last chunk
-	wr_addr = IOIF_FLASH_SECTOR_2_BANK1_ADDR + f_index;//SUIT_APP_FW_ADDRESS + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
+	wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR+  f_index;//IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
 
     if (IOIF_WriteFlashMassBuffered(wr_addr, &DATA_Rxbuf[f_index % sizeof(DATA_Rxbuf)], 0, triggerWrite) != IOIF_FLASH_STATUS_OK)
        {
