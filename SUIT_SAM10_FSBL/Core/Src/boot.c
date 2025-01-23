@@ -514,7 +514,7 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 //	    wr_size = 60;
 //
 //		/* Write Addr : F/W App. Address + Info Address + SOME OTHER SECTOR*/
-//		wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR + f_index;//SUIT_APP_FW_ADDRESS + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
+//		wr_addr = IOIF_FLASH_SECTOR_2_BANK1_ADDR + f_index;//SUIT_APP_FW_ADDRESS + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
 //
 //	    uint8_t triggerWrite = 0;//for overwrite and only last chunk //1;//for padded //(f_index + wr_size >= fw_bin_size); // Trigger if last chunk
 //
@@ -542,7 +542,7 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	uint16_t t_infomsgcrc_compare=0;// (current)
 
 
-//	memcpy(&INFO_Rxbuf, &t_buff[t_cursor],sizeof(INFO_Rxbuf));
+	memcpy(&INFO_Rxbuf, &t_buff[t_cursor],sizeof(INFO_Rxbuf));
 	ProcessReceivedData(t_buff, 64);
 
 	memcpy(&t_file_size, &t_buff[t_cursor],sizeof(t_file_size));
@@ -568,8 +568,8 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	INFO_msgcrc = t_infomsgcrc;
 
 	//get CRC
-	t_infomsgcrc_compare = Calculate_CRC16(t_infomsgcrc_compare, t_buff, 0, 62);
-//	t_infomsgcrc_compare = Calculate_CRC16(t_infomsgcrc_compare, INFO_Rxbuf, 0, 62);//sizeof(t_buff));
+//	t_infomsgcrc_compare = Calculate_CRC16(t_infomsgcrc_compare, t_buff, 0, 62);
+	t_infomsgcrc_compare = Calculate_CRC16(t_infomsgcrc_compare, INFO_Rxbuf, 0, 62);//sizeof(t_buff));
 	INFO_msgcrc_compare= t_infomsgcrc_compare;
 
 	//Send ACK/NACK
@@ -583,7 +583,7 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		uint8_t erase_sector = (INFO_filesize + SUIT_APP_FW_INFO_SIZE) / (uint32_t) STM32H743_IFLASH_SECTOR_SIZE + 1;
 		while(sector_idx < erase_sector)
 		{
-			if(IOIF_EraseFlash(IOIF_FLASH_SECTOR_5_BANK1_ADDR + (sector_idx * STM32H743_IFLASH_SECTOR_SIZE), false) != IOIF_FLASH_STATUS_OK)
+			if(IOIF_EraseFlash(IOIF_FLASH_SECTOR_2_BANK1_ADDR + (sector_idx * STM32H743_IFLASH_SECTOR_SIZE), false) != IOIF_FLASH_STATUS_OK)
 			{
 				return ret = BOOT_UPDATE_ERROR_FLASH_ERASE;
 			}
@@ -654,7 +654,7 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 
 
 //No5
-
+uint8_t DATA_triggerWrite=0;
 static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	int ret=0;
 	int t_cursor = 0;
@@ -670,8 +670,8 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	memcpy(&DATA_Rxbuf, &t_buff[t_cursor],sizeof(DATA_Rxbuf));
 	t_cursor += sizeof(DATA_Rxbuf);
 
-	memcpy(&t_datamsgcrc, &t_buff[t_cursor],sizeof(t_datamsgcrc));
-//	t_datamsgcrc= ((uint16_t)t_buff[t_cursor] << 8) | t_buff[t_cursor+1];
+//	memcpy(&t_datamsgcrc, &t_buff[t_cursor],sizeof(t_datamsgcrc));
+	t_datamsgcrc= ((uint16_t)t_buff[t_cursor] << 8) | t_buff[t_cursor+1];
 	t_cursor += sizeof(t_datamsgcrc);
 	DATA_msgcrc=t_datamsgcrc;
 
@@ -709,10 +709,10 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 			}
 
 			/* Write Addr : F/W App. Address + Info Address + SOME OTHER SECTOR*/
-			wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR + f_index;//SUIT_APP_FW_ADDRESS + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
+			wr_addr = IOIF_FLASH_SECTOR_2_BANK1_ADDR + f_index;//SUIT_APP_FW_ADDRESS + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
 
 		    uint8_t triggerWrite = (f_index + wr_size >= fw_bin_size); // Trigger if last chunk////0//for overwrite and only last chunk //1;//for padded //
-
+		    DATA_triggerWrite=triggerWrite;
 		    if (IOIF_WriteFlashMassBuffered(wr_addr, &DATA_Rxbuf[f_index % sizeof(DATA_Rxbuf)], wr_size, triggerWrite) != IOIF_FLASH_STATUS_OK)
 		       {
 		           return BOOT_UPDATE_ERROR_FLASH_WRITE;
@@ -868,7 +868,7 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 	TOTAL_filecrc=0;
 	return ret;
 
-//	uint32_t startAddress = IOIF_FLASH_SECTOR_5_BANK1_ADDR;
+//	uint32_t startAddress = IOIF_FLASH_SECTOR_2_BANK1_ADDR;
 //
 //
 //	 totalCRC_flash =ReadFlashAndCalculateCRC(startAddress,f_index);
@@ -949,7 +949,7 @@ static int Unpack_Trigger(uint32_t t_fnccode, uint8_t* t_buf){
 	int ret = 0;
 	uint32_t wr_addr = 0;
     uint8_t triggerWrite = 1;//(f_index + wr_size >= fw_bin_size); // Trigger if last chunk
-	wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR + f_index;//SUIT_APP_FW_ADDRESS + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
+	wr_addr = IOIF_FLASH_SECTOR_2_BANK1_ADDR + f_index;//SUIT_APP_FW_ADDRESS + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
 
     if (IOIF_WriteFlashMassBuffered(wr_addr, &DATA_Rxbuf[f_index % sizeof(DATA_Rxbuf)], 0, triggerWrite) != IOIF_FLASH_STATUS_OK)
        {
