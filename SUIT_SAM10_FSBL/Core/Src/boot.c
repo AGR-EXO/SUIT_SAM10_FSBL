@@ -819,10 +819,10 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		       }
 			f_index += wr_size;
 
-			if(triggerWrite==1){
-				MD_Update_Flag=0;
-				DATA_WriteDone=1;
-			}
+//			if(triggerWrite==1){
+//				MD_Update_Flag=0;
+//				DATA_WriteDone=1;
+//			}
 			break;
 		}
 
@@ -931,8 +931,11 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 		if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
 			ret = 100;			// tx error
 
+
 		MD_Update_Flag = 0;
 		MD_EOT_ACK_Flag ++;//= 1;
+
+		DATA_WriteDone=1;
 
 	}
 	else{
@@ -1063,7 +1066,7 @@ int Send_STX(){
 	int ret=0;
 	//No0
 	//send Start transmission
-	uint16_t t_id = STX | (cm_node_id << 4) ;
+	uint16_t t_id = STX | (MD_nodeID << 4) | (cm_node_id) ;
 	uint8_t array[8]={0,};
 	if(IOIF_TransmitFDCAN1(t_id, array , 8) != 0){
 		ret = 100;			// tx error
