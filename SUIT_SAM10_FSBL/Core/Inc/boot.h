@@ -41,7 +41,7 @@
 #define SUIT_APP_FW_ADDRESS				IOIF_FLASH_SECTOR_1_BANK1_ADDR
 #define SUIT_MD_FW_ADDRESS				IOIF_FLASH_SECTOR_5_BANK1_ADDR
 #define STM32_MEMMAP_BASE_ADDRESS 		0x90000000
-#define APP_FW_SIZE_MAX					0x080FFFFF - 0x08020000			// App FW Max Size for 1 Bank
+#define APP_FW_SIZE_MAX					0x080FFFFF - 0x080A0000			// App FW Max Size for 1 Bank
 #define STM32H743_IFLASH_SECTOR_SIZE	0x00020000
 #define BINARY_FILE_SIGN				{0xFF, 0x53, 0x43, 0x43, 0xFF, 0x4D, 0x41, 0x50}
 
@@ -101,7 +101,7 @@ typedef struct _fw_version_t
 
 typedef struct _fw_info_t
 {
-	uint8_t  	 file_sign[8];
+//	uint8_t  	 file_sign[8];
 	uint32_t 	 fw_size;
 	uint32_t 	 fw_crc;
 	uint32_t 	 fw_startAddr;

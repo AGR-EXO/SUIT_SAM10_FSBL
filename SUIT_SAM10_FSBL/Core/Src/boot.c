@@ -257,14 +257,14 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
 	do
 	{
 		/* 1. file sign 비교 */
-		for(int i=0; i<8; i++)
-		{
-			if(pInfo->file_sign[i] !=  file_sign_ref[i])
-			{
-				ret = BOOT_UPDATE_ERROR_FILE_SIGN;
-				break;
-			}
-		}
+//		for(int i=0; i<8; i++)
+//		{
+//			if(pInfo->file_sign[i] !=  file_sign_ref[i])
+//			{
+//				ret = BOOT_UPDATE_ERROR_FILE_SIGN;
+//				break;
+//			}
+//		}
 		/* 2. fw max size 초과 여부 */
 		if(pInfo->fw_size >= APP_FW_SIZE_MAX)
 		{
@@ -669,7 +669,7 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		memset(&INFO_Txbuf[cursor2], 0, idx);//61
 		cursor2+=idx;//61;
 
-		uint16_t t_id = ACK | (MD_nodeID << 4) ;
+		uint16_t t_id = ACK | (MD_nodeID << 4)| (cm_node_id) ;
 
 		if(IOIF_TransmitFDCAN1(t_id, INFO_Txbuf, 64) != 0)
 			ret = 100;			// tx error
@@ -698,7 +698,7 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		memset(&INFO_Txbuf[cursor2], 0, idx);//60
 		cursor2+=idx;//60
 
-		uint16_t t_id = NACK | (MD_nodeID << 4) ;
+		uint16_t t_id = NACK | (MD_nodeID << 4)| (cm_node_id) ;
 
 		if(IOIF_TransmitFDCAN1(t_id, INFO_Txbuf, 64) != 0)
 			ret = 100;			// tx error
@@ -748,7 +748,7 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
         memset(&DATA_Txbuf[cursor2], 0, idx); // Pad with zeros
         cursor2 += idx;
 
-        uint16_t t_id = NACK | (MD_nodeID << 4);
+        uint16_t t_id = NACK | (MD_nodeID << 4) | (cm_node_id);
 
         if (IOIF_TransmitFDCAN1(t_id, DATA_Txbuf, 64) != 0) {
             ret = 100; // TX error
@@ -842,7 +842,7 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		memset(&DATA_Txbuf[cursor2], 0, idx);//61
 		cursor2+=idx;//61;
 
-		uint16_t t_id = ACK | (MD_nodeID << 4) ;
+		uint16_t t_id = ACK | (MD_nodeID << 4) | (cm_node_id);
 
 		if(IOIF_TransmitFDCAN1(t_id, DATA_Txbuf, 64) != 0)
 			ret = 100;			// tx error
@@ -880,7 +880,7 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		memset(&DATA_Txbuf[cursor2], 0, idx);//60
 		cursor2+=idx;//60
 
-		uint16_t t_id = NACK | (MD_nodeID << 4) ;
+		uint16_t t_id = NACK | (MD_nodeID << 4) | (cm_node_id) ;
 
 		if(IOIF_TransmitFDCAN1(t_id, DATA_Txbuf, 64) != 0)
 			ret = 100;			// tx error
@@ -901,15 +901,15 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 	uint8_t retrial=0;
 	int t_cursor = 0;
 
-	uint16_t t_eotmsgcrc=0;
+//	uint16_t t_eotmsgcrc=0;
+//
+//	memcpy(&t_eotmsgcrc, &t_buf[t_cursor],sizeof(t_eotmsgcrc));
+//	t_cursor += sizeof(t_eotmsgcrc);
+//	EOT_TotalMSGCRC = t_eotmsgcrc;
 
-	memcpy(&t_eotmsgcrc, &t_buf[t_cursor],sizeof(t_eotmsgcrc));
-	t_cursor += sizeof(t_eotmsgcrc);
-	EOT_TotalMSGCRC = t_eotmsgcrc;
 
-
-	if(EOT_TotalMSGCRC == TOTAL_filecrc){
-//	if(INFO_filecrc == TOTAL_filecrc){
+//	if(EOT_TotalMSGCRC == TOTAL_filecrc){
+	if(INFO_filecrc == TOTAL_filecrc){
 
 	int cursor2=0;
 		//Send ACK
@@ -926,7 +926,7 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 		memset(&EOT_Txbuf[cursor2],0, idx);//61
 		cursor2+=idx;//61;
 
-		uint16_t t_id = ACK | (MD_nodeID << 4) ;
+		uint16_t t_id = ACK | (MD_nodeID << 4) | (cm_node_id) ;
 
 		if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
 			ret = 100;			// tx error
@@ -958,7 +958,7 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 		memset(&EOT_Txbuf[cursor2], 0, idx);//60
 		cursor2+=idx;//60
 
-		uint16_t t_id = NACK | (MD_nodeID << 4) ;
+		uint16_t t_id = NACK | (MD_nodeID << 4) | (cm_node_id) ;
 
 		if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
 			ret = 100;			// tx error
@@ -1099,7 +1099,7 @@ int Send_NACK(uint16_t reqframe_idx, uint8_t retrial){
 	memset(&STX_Txbuf[cursor2], 0, idx);//60
 	cursor2+=idx;//60
 
-	uint16_t t_id = NACK | (MD_nodeID << 4) ;
+	uint16_t t_id = NACK | (MD_nodeID << 4)|(cm_node_id) ;
 
 	if(IOIF_TransmitFDCAN1(t_id, STX_Txbuf, 64) != 0)
 		ret = 100;			// tx error
