@@ -155,7 +155,7 @@ int main(void)
 	{
 
 		/* Check timeout condition */
-		if (HAL_GetTick() - main_start_time > 5000 && boot_state != BOOT_MD_UPDATE)
+		if (HAL_GetTick() - main_start_time > 40000 && boot_state != BOOT_MD_UPDATE)
 		{
 			Boot_JumpToApp();
 		}

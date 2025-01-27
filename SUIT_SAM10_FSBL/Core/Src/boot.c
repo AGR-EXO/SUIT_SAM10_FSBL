@@ -118,7 +118,8 @@ uint8_t EOT_Txbuf[64]={0,};
 
 uint8_t STX_Txbuf[64]={0,};
 
-uint8_t MD_nodeID = 9;
+BootUpdateSubState MD_boot_state=BOOT_NONE;
+uint8_t MD_nodeID;
 /**
  *------------------------------------------------------------
  *                      STATIC VARIABLES
@@ -135,7 +136,7 @@ uint8_t MD_nodeID = 9;
  *------------------------------------------------------------
  * @brief Static Function prototypes for this module.
  */
-
+static uint8_t Read_Node_ID();
 static int  FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData);
 static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff);
 static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff);
@@ -153,12 +154,14 @@ int Send_NACK(uint16_t reqframe_idx, uint8_t retrial);
 bool Boot_HWInit(void)
 {
 	bool ret = true;
+	MD_nodeID =9;//Read_Node_ID();
 
 	/* BootLoader FW version update */
 	BL_FW_VER.major = FW_VER_MAJOR;
 	BL_FW_VER.minor = FW_VER_MINOR;
 	BL_FW_VER.patch = FW_VER_PATCH;
 	BL_FW_VER.debug = FW_VER_DEBUG;
+
 
 	IOIF_InitFlash();											// Internal Flash Init.
 	/* FD CAN Init. */
@@ -348,6 +351,32 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
  *------------------------------------------------------------
  * @brief Functions intended for internal use within this module.
  */
+
+
+
+/* ------------------- READ NODE ID ------------------- */
+static uint8_t Read_Node_ID()
+{
+    uint8_t temp1 = 0, temp2 = 0, temp3 = 0, temp4 = 0;
+
+#if defined(L30_MD_REV06_ENABLED) || defined(L30_MD_REV07_ENABLED) || defined(L30_MD_REV08_ENABLED)
+    temp1 = IOIF_ReadGPIOPin(IOIF_GPIO_PORT_D, BSP_GPIO_PIN_8);
+    temp2 = IOIF_ReadGPIOPin(IOIF_GPIO_PORT_D, BSP_GPIO_PIN_9);
+    temp3 = IOIF_ReadGPIOPin(IOIF_GPIO_PORT_D, BSP_GPIO_PIN_10);
+    temp4 = IOIF_ReadGPIOPin(IOIF_GPIO_PORT_D, BSP_GPIO_PIN_11);
+#endif
+
+//#if defined(SUIT_MD_ENABLED)
+    temp1 = IOIF_ReadGPIOPin(IOIF_GPIO_PORT_F, IOIF_GPIO_PIN_2);
+    temp2 = IOIF_ReadGPIOPin(IOIF_GPIO_PORT_F, IOIF_GPIO_PIN_3);
+    temp3 = IOIF_ReadGPIOPin(IOIF_GPIO_PORT_F, IOIF_GPIO_PIN_4);
+    temp4 = IOIF_ReadGPIOPin(IOIF_GPIO_PORT_F, IOIF_GPIO_PIN_5);
+//#endif
+
+    return ((temp1<<3)|(temp2<<2)|(temp3<<1)|(temp4));
+}
+
+
 //void ReverseBytesWithinWords(uint8_t* buffer, uint32_t size) {
 //    for (uint32_t i = 0; i < size; i += 4) {
 //        if (i + 4 <= size) { // Ensure we don't go out of bounds
@@ -598,6 +627,7 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
     int ret=0;
     int t_cursor = 0;
 
+    MD_boot_state=BOOT_INFO;
 	uint32_t t_file_size;
 	uint32_t t_start_addr_offset;
 	uint16_t t_file_crc;// (total)
@@ -738,6 +768,7 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	int ret=0;
 	int t_cursor = 0;
+	MD_boot_state=BOOT_DATA;
 
 	uint16_t t_dataindexnumber=0;
 	uint16_t t_datamsgcrc=0;
@@ -912,6 +943,7 @@ int totalCRC_flash=0;
 uint16_t EOT_TotalMSGCRC=0;
 static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 	int ret=0;
+	MD_boot_state=BOOT_EOT;
 
 	//No8
 	//if CRC ok ACK, else NACK send
@@ -1084,6 +1116,7 @@ static int Unpack_Trigger(uint32_t t_fnccode, uint8_t* t_buf){
 
 int Send_STX(){
 	int ret=0;
+	MD_boot_state=BOOT_STX;
 	//No0
 	//send Start transmission
 	uint16_t t_id = STX | (MD_nodeID << 4) | (cm_node_id) ;
