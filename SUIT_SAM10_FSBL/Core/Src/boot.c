@@ -54,6 +54,8 @@ uint32_t fatfs_readbyte = 0;
 //uint32_t f_index = 0;
 //uint8_t  update_percent = 0;
 
+fw_info_t MD_FWInfoObj={0,};
+
 uint8_t MD_Update_Flag __attribute__((section(".MD_Update_Flag_Settings")));
 
 uint8_t MD_STX_ACK_Flag = 0;
@@ -191,25 +193,25 @@ BootUpdateError Boot_JumpToApp(void)
 {
 	BootUpdateError ret = BOOT_UPDATE_OK;
 
-	/* 1. Verifying Application FW before jump */
+//	/* 1. Verifying Application FW before jump */
 //	ret = Boot_UpdateVerify((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR);
 
 	/* 2. Jump to App. FW */
-	if(ret == BOOT_UPDATE_OK)
-	{
+//	if(ret == BOOT_UPDATE_OK)
+//	{
 		void (*SysMemBootJump)(void);
-		SysMemBootJump = (void (*)(void)) (*((uint32_t *) ((IOIF_FLASH_SECTOR_5_BANK1_ADDR + 4))));//+4bytes worth of interrupt vector at first //+ SUIT_APP_FW_INFO_SIZE + 4))));
+		SysMemBootJump = (void (*)(void)) (*((uint32_t *) ((IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE + 4))));//+4bytes worth of interrupt vector at first //+ SUIT_APP_FW_INFO_SIZE + 4))));
 
 		Boot_AllDev_DeInit();
 
-		__set_MSP(*(uint32_t*)IOIF_FLASH_SECTOR_5_BANK1_ADDR);// + SUIT_APP_FW_INFO_SIZE);
-		SCB->VTOR = IOIF_FLASH_SECTOR_5_BANK1_ADDR;// + SUIT_APP_FW_INFO_SIZE;
+		__set_MSP(*(uint32_t*)IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE);
+		SCB->VTOR = IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE;
 
 		SysMemBootJump();
-	}
-	else{
-		ret = BOOT_UPDATE_ERROR_INVALID_FW;
-	}
+//	}
+//	else{
+//		ret = BOOT_UPDATE_ERROR_INVALID_FW;
+//	}
 	return ret;
 }
 
@@ -246,13 +248,13 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
 	uint32_t addr = 0;
 	uint32_t length = 0;
 
-	uint8_t read_buf[128] = {0,};
+	uint8_t read_buf[512] = {0,};
 	uint32_t read_buf_idx = 0;
 	uint32_t read_buf_len = 0;
 
 	fw_info_t *pInfo = (fw_info_t*)(flashAddr);
 
-	uint8_t file_sign_ref[8] = BINARY_FILE_SIGN;
+//	uint8_t file_sign_ref[8] = BINARY_FILE_SIGN;
 
 	do
 	{
@@ -279,8 +281,8 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
 		while (read_buf_idx < length)
 		{
 			read_buf_len = length - read_buf_idx;
-			if (read_buf_len > 128)
-				read_buf_len = 128;
+			if (read_buf_len > 512)
+				read_buf_len = 512;
 
 			if(IOIF_ReadFlash(addr + read_buf_idx, read_buf, read_buf_len) != IOIF_FLASH_STATUS_OK)
 			{
@@ -294,6 +296,9 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
 			{
 				Update_CRC16(&crc, read_buf[j]);
 			}
+
+			// CRC for the current chunk
+//			crc = Calculate_CRC16(crc, read_buf, 0, read_buf_len);
 		}
 
 		if(ret == BOOT_UPDATE_OK)
@@ -505,7 +510,13 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 
 		switch (fnc_code){
 		case FW_UPDATE:
-			Send_STX();
+			if(Send_STX() == 0){
+
+			}
+			else{
+				Send_NACK(0, stx_cnt);//STX
+				stx_cnt=0;
+			}
 			break;
 
 		case NACK:
@@ -521,8 +532,7 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 
 		case Info_MSG:
 
-			if (Unpack_InfoMsg(fnc_code, fdcan_rx_test_buf) < 0) {
-				//Error_Handler();
+			if (Unpack_InfoMsg(fnc_code, fdcan_rx_test_buf) == 0) {
 			} else{
 				//Send NACK to CM
 				//if(Boot_UpdateFWfromFile(&loaderfs, &loaderfile_MD, (uint8_t*)MD_FW_filename, BOOT_INTERNAL_FLASH, SUIT_MD_FW_ADDRESS) == BOOT_UPDATE_OK)
@@ -531,8 +541,7 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 			break;
 
 		case Data_MSG:
-			if (Unpack_DataMsg(fnc_code, fdcan_rx_test_buf) < 0) {
-				//Error_Handler();
+			if (Unpack_DataMsg(fnc_code, fdcan_rx_test_buf) == 0) {
 			} else{
 				//Send NACK to CM
 
@@ -585,7 +594,6 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 }
 
 //No3
-uint8_t INFO_outputBuff[64]={0,};
 static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
     int ret=0;
     int t_cursor = 0;
@@ -598,22 +606,25 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	uint16_t t_infomsgcrc;// (current)
 	uint16_t t_infomsgcrc_compare=0;// (current)
 
+	uint8_t INFO_outputBuff[64]={0,};
+//	fw_info_t MD_FWInfoObj={0,};
 
-//	memcpy(&INFO_Rxbuf, &t_buff[t_cursor],sizeof(INFO_Rxbuf));
-//	ProcessReceivedData(t_buff, 64);
 	ProcessReceivedData(t_buff, INFO_outputBuff, 64);
 
 	memcpy(&t_file_size, &INFO_outputBuff[t_cursor],sizeof(t_file_size));
 	t_cursor += sizeof(t_file_size);
 	INFO_filesize =t_file_size;//4248289;//
+	MD_FWInfoObj.fw_size=t_file_size;
 
 	memcpy(&t_start_addr_offset, &INFO_outputBuff[t_cursor],sizeof(t_start_addr_offset));
 	t_cursor += sizeof(t_start_addr_offset);
 	INFO_startaddroffset = t_start_addr_offset;//64;//
+	MD_FWInfoObj.fw_startAddr=t_start_addr_offset;
 
 	memcpy(&t_file_crc, &INFO_outputBuff[t_cursor],sizeof(t_file_crc));
 	t_cursor += sizeof(t_file_crc);
 	INFO_filecrc = t_file_crc;
+	MD_FWInfoObj.fw_crc=t_file_crc;
 
 	memcpy(&t_total_data_index, &INFO_outputBuff[t_cursor],sizeof(t_total_data_index));
 	t_cursor += sizeof(t_total_data_index);
@@ -632,13 +643,15 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 
 	//Send ACK/NACK
 	uint8_t retrial=0;
+	uint32_t wr_addr =0;
 
 	//No4
 	//if CRC ok ACK, else NACK send
 	if(INFO_msgcrc == INFO_msgcrc_compare){
 		//Erase flash sector of new fw
 		uint8_t sector_idx = 0; // the sector where i want to write the new firmware
-		uint8_t erase_sector = (INFO_filesize + SUIT_APP_FW_INFO_SIZE) / (uint32_t) STM32H743_IFLASH_SECTOR_SIZE + 1;
+//		uint8_t erase_sector = (INFO_filesize + SUIT_APP_FW_INFO_SIZE) / (uint32_t) STM32H743_IFLASH_SECTOR_SIZE + 1;
+		uint8_t erase_sector = (MD_FWInfoObj.fw_size + SUIT_APP_FW_INFO_SIZE) / (uint32_t) STM32H743_IFLASH_SECTOR_SIZE + 1;
 		while(sector_idx < erase_sector)
 		{
 			if(IOIF_EraseFlash(IOIF_FLASH_SECTOR_5_BANK1_ADDR + (sector_idx * STM32H743_IFLASH_SECTOR_SIZE), false) != IOIF_FLASH_STATUS_OK)
@@ -652,6 +665,15 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 
 			sector_idx++;
 		}
+
+		/* Write Addr : F/W App. Address + Info Address + SOME OTHER SECTOR*/
+		wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR;//IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
+
+		if (IOIF_WriteFlashMassBuffered(wr_addr, &MD_FWInfoObj, SUIT_APP_FW_INFO_SIZE, 1) != IOIF_FLASH_STATUS_OK)
+		{
+			return BOOT_UPDATE_ERROR_FLASH_WRITE;
+		}
+		f_index += SUIT_APP_FW_INFO_SIZE;
 
 		int cursor2=0;
 		//Send ACK
@@ -762,12 +784,6 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
     expected_index = t_dataindexnumber + 1;
 
 
-
-
-
-
-
-
 	memcpy(&DATA_Rxbuf, &t_buff[t_cursor],sizeof(DATA_Rxbuf));
 	t_cursor += sizeof(DATA_Rxbuf);
 
@@ -787,7 +803,8 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	if(DATA_msgcrc == DATA_msgcrc_compare){
 //		DATA_msgcrc_compare=0;
 		t_datamsgcrc_compare=0;
-		TOTAL_filecrc+=DATA_msgcrc;
+//		TOTAL_filecrc+=DATA_msgcrc;
+
 		//Write in flash sector for new fw
 		/* 2-2. File Read and Flash Write */
 
@@ -809,7 +826,7 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 			}
 
 			/* Write Addr : F/W App. Address + Info Address + SOME OTHER SECTOR*/
-			wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR+  f_index;//IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
+			wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR+ SUIT_APP_FW_INFO_SIZE + f_index;//IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
 
 		    uint8_t triggerWrite = (f_index + wr_size >= fw_bin_size); // Trigger if last chunk////0//for overwrite and only last chunk //1;//for padded //
 		    DATA_triggerWrite=triggerWrite;
@@ -899,7 +916,7 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 	//No8
 	//if CRC ok ACK, else NACK send
 	uint8_t retrial=0;
-	int t_cursor = 0;
+//	int t_cursor = 0;
 
 //	uint16_t t_eotmsgcrc=0;
 //
@@ -908,10 +925,13 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 //	EOT_TotalMSGCRC = t_eotmsgcrc;
 
 
-//	if(EOT_TotalMSGCRC == TOTAL_filecrc){
-	if(INFO_filecrc == TOTAL_filecrc){
+	/* 1. Verifying Application FW before jump */
+	if(Boot_UpdateVerify((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
+		//	if(EOT_TotalMSGCRC == TOTAL_filecrc){
+		//	if(INFO_filecrc == TOTAL_filecrc){
+		//	if(MD_FWInfoObj.fw_crc == TOTAL_filecrc){
 
-	int cursor2=0;
+		int cursor2=0;
 		//Send ACK
 		//first data frame is index 0 or 1???
 		uint16_t next_idx=1;//DATA_FRAME_IDX_1
@@ -963,11 +983,11 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 		if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
 			ret = 100;			// tx error
 
-//		MD_EOT_ACK_Flag = 0;
+		//		MD_EOT_ACK_Flag = 0;
 		MD_EOT_NACK_Flag++;// = 0;
 
 	}
-	TOTAL_filecrc=0;
+//	TOTAL_filecrc=0;
 	return ret;
 
 //	uint32_t startAddress = IOIF_FLASH_SECTOR_5_BANK1_ADDR;
@@ -1076,7 +1096,6 @@ int Send_STX(){
 
 	return ret;
 }
-
 
 int Send_NACK(uint16_t reqframe_idx, uint8_t retrial){
 	int ret = 0;

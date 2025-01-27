@@ -114,6 +114,8 @@ int main(void)
 	uint32_t upgrade_pretime = 0;
 	uint32_t upgrade_current_time=0;
 
+	uint32_t main_start_time = 0;
+
 	/* USER CODE END 1 */
 
 	/* MCU Configuration--------------------------------------------------------*/
@@ -142,12 +144,22 @@ int main(void)
 	if(Boot_HWInit() != true)
 		boot_state = BOOT_ERROR;
 
+	/* Record start time for timeout condition */
+	main_start_time = HAL_GetTick();
+
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
 	while (1)
 	{
+
+		/* Check timeout condition */
+		if (HAL_GetTick() - main_start_time > 5000 && boot_state != BOOT_MD_UPDATE)
+		{
+			Boot_JumpToApp();
+		}
+
 		/* 1. Check Boot Mode */
 		if(boot_state != BOOT_ERROR)
 			boot_state = Boot_CheckUpdateMode();
