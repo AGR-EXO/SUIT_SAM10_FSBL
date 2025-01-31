@@ -65,6 +65,17 @@ typedef enum _BootUpdateState
 	BOOT_ERROR = 99,
 } BootUpdateState;
 
+typedef enum _BootUpdateSubState
+{
+	BOOT_STX,
+	BOOT_INFO,
+	BOOT_DATA,			//usb update mode
+	BOOT_EOT,					//copy file only to flash
+	BOOT_NONE,
+
+//	BOOT_ERROR = 99,
+} BootUpdateSubState;
+
 
 typedef enum _BootUpdateError
 {

@@ -54,6 +54,7 @@ uint32_t fatfs_readbyte = 0;
 //uint32_t f_index = 0;
 //uint8_t  update_percent = 0;
 
+fw_info_t MD_FWInfoObj={0,};
 uint8_t MD_Update_Flag __attribute__((section(".MD_Update_Flag_Settings")));
 
 uint8_t MD_STX_ACK_Flag = 0;
@@ -116,7 +117,9 @@ uint8_t EOT_Txbuf[64]={0,};
 
 uint8_t STX_Txbuf[64]={0,};
 
-uint8_t MD_nodeID = 9;
+uint8_t MD_nodeID = 8;
+BootUpdateSubState MD_boot_state=BOOT_NONE;
+
 /**
  *------------------------------------------------------------
  *                      STATIC VARIABLES
@@ -505,6 +508,13 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 
 		switch (fnc_code){
 		case FW_UPDATE:
+//			if(Send_STX() == 0){
+//
+//			}
+//			else{
+//				Send_NACK(0, stx_cnt);//STX
+//				stx_cnt=0;
+//			}
 			Send_STX();
 			break;
 
@@ -521,7 +531,7 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 
 		case Info_MSG:
 
-			if (Unpack_InfoMsg(fnc_code, fdcan_rx_test_buf) < 0) {
+			if (Unpack_InfoMsg(fnc_code, fdcan_rx_test_buf) == 0) {
 				//Error_Handler();
 			} else{
 				//Send NACK to CM
@@ -531,7 +541,7 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 			break;
 
 		case Data_MSG:
-			if (Unpack_DataMsg(fnc_code, fdcan_rx_test_buf) < 0) {
+			if (Unpack_DataMsg(fnc_code, fdcan_rx_test_buf) == 0) {
 				//Error_Handler();
 			} else{
 				//Send NACK to CM
@@ -585,11 +595,11 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 }
 
 //No3
-uint8_t INFO_outputBuff[64]={0,};
 static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
     int ret=0;
     int t_cursor = 0;
 
+    MD_boot_state=BOOT_INFO;
 	uint32_t t_file_size;
 	uint32_t t_start_addr_offset;
 	uint16_t t_file_crc;// (total)
@@ -598,6 +608,7 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	uint16_t t_infomsgcrc;// (current)
 	uint16_t t_infomsgcrc_compare=0;// (current)
 
+uint8_t INFO_outputBuff[64]={0,};
 
 //	memcpy(&INFO_Rxbuf, &t_buff[t_cursor],sizeof(INFO_Rxbuf));
 //	ProcessReceivedData(t_buff, 64);
@@ -606,14 +617,17 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	memcpy(&t_file_size, &INFO_outputBuff[t_cursor],sizeof(t_file_size));
 	t_cursor += sizeof(t_file_size);
 	INFO_filesize =t_file_size;//4248289;//
+	MD_FWInfoObj.fw_size=t_file_size;
 
 	memcpy(&t_start_addr_offset, &INFO_outputBuff[t_cursor],sizeof(t_start_addr_offset));
 	t_cursor += sizeof(t_start_addr_offset);
 	INFO_startaddroffset = t_start_addr_offset;//64;//
+	MD_FWInfoObj.fw_startAddr=t_start_addr_offset;
 
 	memcpy(&t_file_crc, &INFO_outputBuff[t_cursor],sizeof(t_file_crc));
 	t_cursor += sizeof(t_file_crc);
 	INFO_filecrc = t_file_crc;
+	MD_FWInfoObj.fw_crc=t_file_crc;
 
 	memcpy(&t_total_data_index, &INFO_outputBuff[t_cursor],sizeof(t_total_data_index));
 	t_cursor += sizeof(t_total_data_index);
@@ -632,13 +646,15 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 
 	//Send ACK/NACK
 	uint8_t retrial=0;
+	uint32_t wr_addr =0;
 
 	//No4
 	//if CRC ok ACK, else NACK send
 	if(INFO_msgcrc == INFO_msgcrc_compare){
 		//Erase flash sector of new fw
 		uint8_t sector_idx = 0; // the sector where i want to write the new firmware
-		uint8_t erase_sector = (INFO_filesize + SUIT_APP_FW_INFO_SIZE) / (uint32_t) STM32H743_IFLASH_SECTOR_SIZE + 1;
+//		uint8_t erase_sector = (INFO_filesize + SUIT_APP_FW_INFO_SIZE) / (uint32_t) STM32H743_IFLASH_SECTOR_SIZE + 1;
+		uint8_t erase_sector = (MD_FWInfoObj.fw_size + SUIT_APP_FW_INFO_SIZE) / (uint32_t) STM32H743_IFLASH_SECTOR_SIZE + 1;
 		while(sector_idx < erase_sector)
 		{
 			if(IOIF_EraseFlash(IOIF_FLASH_SECTOR_5_BANK1_ADDR + (sector_idx * STM32H743_IFLASH_SECTOR_SIZE), false) != IOIF_FLASH_STATUS_OK)
@@ -652,6 +668,15 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 
 			sector_idx++;
 		}
+
+		/* Write Addr : F/W App. Address + Info Address + SOME OTHER SECTOR*/
+		wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR;//IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
+
+		if (IOIF_WriteFlashMassBuffered(wr_addr, &MD_FWInfoObj, SUIT_APP_FW_INFO_SIZE, 1) != IOIF_FLASH_STATUS_OK)
+		{
+			return BOOT_UPDATE_ERROR_FLASH_WRITE;
+		}
+		f_index += SUIT_APP_FW_INFO_SIZE;
 
 		int cursor2=0;
 		//Send ACK
@@ -716,6 +741,7 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	int ret=0;
 	int t_cursor = 0;
+	MD_boot_state=BOOT_DATA;
 
 	uint16_t t_dataindexnumber=0;
 	uint16_t t_datamsgcrc=0;
@@ -787,7 +813,7 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	if(DATA_msgcrc == DATA_msgcrc_compare){
 //		DATA_msgcrc_compare=0;
 		t_datamsgcrc_compare=0;
-		TOTAL_filecrc+=DATA_msgcrc;
+//		TOTAL_filecrc+=DATA_msgcrc;
 		//Write in flash sector for new fw
 		/* 2-2. File Read and Flash Write */
 
@@ -809,7 +835,7 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 			}
 
 			/* Write Addr : F/W App. Address + Info Address + SOME OTHER SECTOR*/
-			wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR+  f_index;//IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
+			wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR + f_index; //+ SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
 
 		    uint8_t triggerWrite = (f_index + wr_size >= fw_bin_size); // Trigger if last chunk////0//for overwrite and only last chunk //1;//for padded //
 		    DATA_triggerWrite=triggerWrite;
@@ -895,11 +921,12 @@ int totalCRC_flash=0;
 uint16_t EOT_TotalMSGCRC=0;
 static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 	int ret=0;
+	MD_boot_state=BOOT_EOT;
 
 	//No8
 	//if CRC ok ACK, else NACK send
 	uint8_t retrial=0;
-	int t_cursor = 0;
+//	int t_cursor = 0;
 
 //	uint16_t t_eotmsgcrc=0;
 //
@@ -909,7 +936,9 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 
 
 //	if(EOT_TotalMSGCRC == TOTAL_filecrc){
-	if(INFO_filecrc == TOTAL_filecrc){
+//	if(INFO_filecrc == TOTAL_filecrc){
+	if(Boot_UpdateVerify((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
+
 
 	int cursor2=0;
 		//Send ACK
@@ -1064,6 +1093,7 @@ static int Unpack_Trigger(uint32_t t_fnccode, uint8_t* t_buf){
 
 int Send_STX(){
 	int ret=0;
+	MD_boot_state=BOOT_STX;
 	//No0
 	//send Start transmission
 	uint16_t t_id = STX | (MD_nodeID << 4) | (cm_node_id) ;
