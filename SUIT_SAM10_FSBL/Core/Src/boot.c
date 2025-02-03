@@ -117,6 +117,9 @@ uint8_t EOT_Txbuf[64]={0,};
 
 uint8_t STX_Txbuf[64]={0,};
 
+int totalCRC_flash=0;
+uint16_t EOT_TotalMSGCRC=0;
+
 uint8_t MD_nodeID = 9;
 BootUpdateSubState MD_boot_state=BOOT_NONE;
 
@@ -259,15 +262,6 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
 
 	do
 	{
-		/* 1. file sign 비교 */
-//		for(int i=0; i<8; i++)
-//		{
-//			if(pInfo->file_sign[i] !=  file_sign_ref[i])
-//			{
-//				ret = BOOT_UPDATE_ERROR_FILE_SIGN;
-//				break;
-//			}
-//		}
 		/* 2. fw max size 초과 여부 */
 		if(pInfo->fw_size >= APP_FW_SIZE_MAX)
 		{
@@ -314,31 +308,6 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
 
 
 
-//uint8_t Boot_FileTransmitFDCAN(void)
-//{
-//	uint8_t ret = 0;
-//
-//	uint8_t tx_buf[64] = {0,};
-//
-//	/* 1. Read Flash */
-//	/* 1-1. Read File Info */
-//	if(IOIF_ReadFlash(SUIT_MD_FW_ADDRESS, tx_buf, sizeof(fw_info_t)) != IOIF_FLASH_STATUS_OK)
-//	{
-//		return ret = 99;	//error
-//	}
-//
-//	/* 2. Send Msg */
-//	memcpy(fdcan_tx_buf_test, tx_buf, 64);
-//
-//
-//	uint16_t t_id = magic_code | (cm_node_id << 4) | dest_id;
-//
-//	if(IOIF_TransmitFDCAN1(t_id, fdcan_tx_buf_test, 64) != 0)
-//		ret = 100;			// tx error
-//
-//	return ret;
-//}
-
 
 /**
  *------------------------------------------------------------
@@ -346,102 +315,6 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
  *------------------------------------------------------------
  * @brief Functions intended for internal use within this module.
  */
-//void ReverseBytesWithinWords(uint8_t* buffer, uint32_t size) {
-//    for (uint32_t i = 0; i < size; i += 4) {
-//        if (i + 4 <= size) { // Ensure we don't go out of bounds
-//            uint8_t temp;
-//
-//            // Swap first and second bytes within the 4-byte word
-//            temp = buffer[i];
-//            buffer[i] = buffer[i + 1];
-//            buffer[i + 1] = temp;
-//
-//            // Swap third and fourth bytes within the 4-byte word
-//            temp = buffer[i + 2];
-//            buffer[i + 2] = buffer[i + 3];
-//            buffer[i + 3] = temp;
-//        }
-//    }
-//}
-//
-//
-
-//void ProcessReceivedData(uint8_t* buffer, uint32_t size) {
-//    if (size != 64) {
-//        // Ensure the buffer is exactly 64 bytes
-//        return;
-//    }
-//
-//    // 1. Invert the first 2 bytes
-//    uint8_t temp = buffer[0];
-//    buffer[0] = buffer[1];
-//    buffer[1] = temp;
-//
-//    // 2. Invert every 4 bytes from index 2 to 61
-//    for (uint32_t i = 2; i < 62; i += 4) {
-//        // Ensure we don't go out of bounds
-//        if (i + 3 < 62) {
-//            // Swap byte 0 ↔ byte 3 and byte 1 ↔ byte 2 within the 4-byte word
-//            temp = buffer[i];
-//            buffer[i] = buffer[i + 3];
-//            buffer[i + 3] = temp;
-//
-//            temp = buffer[i + 1];
-//            buffer[i + 1] = buffer[i + 2];
-//            buffer[i + 2] = temp;
-//        }
-//    }
-//
-//    // 3. Invert the last 2 bytes (index 62 and 63)
-//    temp = buffer[62];
-//    buffer[62] = buffer[63];
-//    buffer[63] = temp;
-//}
-
-
-//INFO MSG
-//void ProcessReceivedData(uint8_t* buffer, uint32_t size) {
-//    if (size != 64) {
-//        // Ensure the buffer is exactly 64 bytes
-//        return;
-//    }
-//
-//    uint8_t temp;
-//
-//    // 1. Swap the first 4 bytes
-//    temp = buffer[0];
-//    buffer[0] = buffer[3];
-//    buffer[3] = temp;
-//
-//    temp = buffer[1];
-//    buffer[1] = buffer[2];
-//    buffer[2] = temp;
-//
-//    // 2. Swap the next 4 bytes (index 4 to 7)
-//    temp = buffer[4];
-//    buffer[4] = buffer[7];
-//    buffer[7] = temp;
-//
-//    temp = buffer[5];
-//    buffer[5] = buffer[6];
-//    buffer[6] = temp;
-//
-//    // 3. Swap the next 2 bytes (index 8 and 9)
-//    temp = buffer[8];
-//    buffer[8] = buffer[9];
-//    buffer[9] = temp;
-//
-//    // 4. Swap the next 2 bytes (index 10 and 11)
-//    temp = buffer[10];
-//    buffer[10] = buffer[11];
-//    buffer[11] = temp;
-//
-//    // 5. Swap the last 2 bytes (index 62 and 63)
-//    temp = buffer[62];
-//    buffer[62] = buffer[63];
-//    buffer[63] = temp;
-//}
-
 
 void ProcessReceivedData(const uint8_t* buffer, uint8_t* output_buffer, uint32_t size) {
     if (size != 64) {
@@ -496,17 +369,12 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 {
 	cb_cnt++;
 	// Extract origin node (upper byte)
-//	ori_node = (id & 0x0f0) >> 4;
 	ori_node = (id >> 4) & 0x0F; // Shift right by 4 bits and mask with 0x0F
-
     // Extract destination node (lower nibble)
 	fnc_code = id & 0x700;   // Mask with 0x0F to get the lower nibble
-
-//	if(MD_STX_ACK_Flag == 1){
 	memcpy(fdcan_rx_test_buf, rx_pData, 64);
 
-
-		switch (fnc_code){
+	switch (fnc_code){
 		case FW_UPDATE:
 //			if(Send_STX() == 0){
 //
@@ -532,7 +400,6 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 		case Info_MSG:
 
 			if (Unpack_InfoMsg(fnc_code, fdcan_rx_test_buf) == 0) {
-				//Error_Handler();
 			} else{
 				//Send NACK to CM
 				//if(Boot_UpdateFWfromFile(&loaderfs, &loaderfile_MD, (uint8_t*)MD_FW_filename, BOOT_INTERNAL_FLASH, SUIT_MD_FW_ADDRESS) == BOOT_UPDATE_OK)
@@ -542,7 +409,6 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 
 		case Data_MSG:
 			if (Unpack_DataMsg(fnc_code, fdcan_rx_test_buf) == 0) {
-				//Error_Handler();
 			} else{
 				//Send NACK to CM
 
@@ -552,44 +418,24 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 		case EOT:
 			//No7
 			//receive EOT, do CRC on whole file
-			if(Unpack_EOT(fnc_code, fdcan_rx_test_buf)<0){
-				//Error_Handler();
+			if(Unpack_EOT(fnc_code, fdcan_rx_test_buf)==0){
 			} else{
-
+				//Send NACK to CM
 			}
 			break;
 
-		case TRIGGER:
-			if(Unpack_Trigger(fnc_code,fdcan_rx_test_buf)<0){
-
-			}
-			else{
-
-			}
-			break;
+//		case TRIGGER:
+//			if(Unpack_Trigger(fnc_code,fdcan_rx_test_buf)<0){
+//
+//			}
+//			else{
+//
+//			}
+//			break;
 
 
 		default: break;
-//		}
 	}
-
-//		memcpy(DATA_Rxbuf, &fdcan_rx_test_buf[2], 60);
-
-//		uint32_t wr_addr = 0;
-
-//	    wr_size = 60;
-//
-//		/* Write Addr : F/W App. Address + Info Address + SOME OTHER SECTOR*/
-//		wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR+  f_index;//IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
-//
-//	    uint8_t triggerWrite = 0;//for overwrite and only last chunk //1;//for padded //(f_index + wr_size >= fw_bin_size); // Trigger if last chunk
-//
-//	    if (IOIF_WriteFlashMassBuffered(wr_addr, &DATA_Rxbuf[f_index % sizeof(DATA_Rxbuf)], wr_size, triggerWrite) != IOIF_FLASH_STATUS_OK)
-//	       {
-//	           return BOOT_UPDATE_ERROR_FLASH_WRITE;
-//	       }
-//
-//		f_index += wr_size;
 
 	return 0;
 }
@@ -608,10 +454,8 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	uint16_t t_infomsgcrc;// (current)
 	uint16_t t_infomsgcrc_compare=0;// (current)
 
-uint8_t INFO_outputBuff[64]={0,};
+	uint8_t INFO_outputBuff[64]={0,};
 
-//	memcpy(&INFO_Rxbuf, &t_buff[t_cursor],sizeof(INFO_Rxbuf));
-//	ProcessReceivedData(t_buff, 64);
 	ProcessReceivedData(t_buff, INFO_outputBuff, 64);
 
 	memcpy(&t_file_size, &INFO_outputBuff[t_cursor],sizeof(t_file_size));
@@ -787,14 +631,7 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
     // Update the expected index for the next iteration
     expected_index = t_dataindexnumber + 1;
 
-
-
-
-
-
-
-
-	memcpy(&DATA_Rxbuf, &t_buff[t_cursor],sizeof(DATA_Rxbuf));
+    memcpy(&DATA_Rxbuf, &t_buff[t_cursor],sizeof(DATA_Rxbuf));
 	t_cursor += sizeof(DATA_Rxbuf);
 
 //	memcpy(&t_datamsgcrc, &t_buff[t_cursor],sizeof(t_datamsgcrc));
@@ -811,7 +648,6 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	uint8_t retrial=0;
 
 	if(DATA_msgcrc == DATA_msgcrc_compare){
-//		DATA_msgcrc_compare=0;
 		t_datamsgcrc_compare=0;
 //		TOTAL_filecrc+=DATA_msgcrc;
 		//Write in flash sector for new fw
@@ -917,8 +753,7 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	return ret;
 }
 
-int totalCRC_flash=0;
-uint16_t EOT_TotalMSGCRC=0;
+
 static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 	int ret=0;
 	MD_boot_state=BOOT_EOT;
@@ -926,21 +761,9 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 	//No8
 	//if CRC ok ACK, else NACK send
 	uint8_t retrial=0;
-//	int t_cursor = 0;
 
-//	uint16_t t_eotmsgcrc=0;
-//
-//	memcpy(&t_eotmsgcrc, &t_buf[t_cursor],sizeof(t_eotmsgcrc));
-//	t_cursor += sizeof(t_eotmsgcrc);
-//	EOT_TotalMSGCRC = t_eotmsgcrc;
-
-
-//	if(EOT_TotalMSGCRC == TOTAL_filecrc){
-//	if(INFO_filecrc == TOTAL_filecrc){
 	if(Boot_UpdateVerify((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
-
-
-	int cursor2=0;
+		int cursor2=0;
 		//Send ACK
 		//first data frame is index 0 or 1???
 		uint16_t next_idx=1;//DATA_FRAME_IDX_1
@@ -992,90 +815,13 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 		if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
 			ret = 100;			// tx error
 
-//		MD_EOT_ACK_Flag = 0;
 		MD_EOT_NACK_Flag++;// = 0;
 
 	}
 	TOTAL_filecrc=0;
 	return ret;
-
-//	uint32_t startAddress = IOIF_FLASH_SECTOR_5_BANK1_ADDR;
-//
-//
-//	 totalCRC_flash =ReadFlashAndCalculateCRC(startAddress,f_index);
-//
-
 }
 
-//uint16_t packetCRC=0;
-//int ReadFlashAndCalculateCRC(uint32_t startAddress, uint32_t dataSize) {
-//    uint8_t buffer[60]; // 60-byte buffer
-//    int totalCRC = 0;
-//
-//    for (uint32_t offset = 0; offset < dataSize; offset += 60) {
-//        uint32_t readSize = (dataSize - offset) < 60 ? (dataSize - offset) : 60;
-//
-//        // Boundary check
-//        if ((startAddress + offset + readSize) > 0x080FFFFF) {
-//            printf("Error: Out of bounds access at offset %lu\n", offset);
-//            return -1; // Return error
-//        }
-//
-//        // Alignment check
-//        if ((startAddress + offset) % 4 != 0) {
-//            printf("Error: Unaligned address at offset %lu\n", offset);
-//            return -1; // Return error
-//        }
-//
-//        // Zero the buffer to avoid stale data
-//        memset(buffer, 0xFF, sizeof(buffer));
-//
-//        // Debug information
-//        printf("Reading flash at address: 0x%08X, size: %lu\n", startAddress + offset, readSize);
-//
-//        // Read data from flash into the buffer
-//        IOIF_ReadFlash(startAddress + offset, buffer, readSize);
-//
-//        // Calculate the CRC for the actual data size (readSize)
-//        packetCRC = Calculate_CRC16(packetCRC, buffer, 0, readSize);
-//
-//        // Add the packet CRC to the total CRC
-//        totalCRC += packetCRC;
-//
-//        // Debugging/logging (optional)
-//        printf("Offset: %lu, ReadSize: %lu, Packet CRC: 0x%04X\n", offset, readSize, packetCRC);
-//    }
-//
-//    return totalCRC;
-//}
-//
-//uint16_t chunkCRC=0;
-//// Function to read and calculate total CRC of all flash data
-//int ReadFlashAndCalculateCRC(uint32_t startAddress, uint32_t dataSize) {
-//    int totalCRC = 0;
-//    uint32_t remainingData = dataSize;
-//    uint32_t currentAddr = startAddress;
-//
-//    while (remainingData > 0) {
-//        uint32_t readSize = (remainingData > 60) ? 60 : remainingData;
-//
-//        // Read data from flash into the buffer
-//        memset(flashReadBuffer, 0xFF, FLASH_BUFFER_SIZE); // Clear buffer before reading
-//        IOIF_ReadFlash(currentAddr, flashReadBuffer, readSize);
-//
-//        // Calculate CRC for this chunk
-//        chunkCRC = Calculate_CRC16(chunkCRC, flashReadBuffer, 0, readSize);
-////        totalCRC = Calculate_CRC16(totalCRC, flashReadBuffer, 0, readSize);
-//
-//        // Move to the next chunk
-//        currentAddr += readSize;
-//        remainingData -= readSize;
-//        totalCRC += chunkCRC;
-//
-//    }
-//
-//    return totalCRC;
-//}
 static int Unpack_Trigger(uint32_t t_fnccode, uint8_t* t_buf){
 	int ret = 0;
 	uint32_t wr_addr = 0;
