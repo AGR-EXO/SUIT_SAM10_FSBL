@@ -101,7 +101,14 @@ void Error_Handler(void);
 #define LED_DRV_SPI_SCK_GPIO_Port GPIOG
 #define MC_24V_PWR_EN_Pin GPIO_PIN_12
 #define MC_24V_PWR_EN_GPIO_Port GPIOG
-
+#define ID_SET1_Pin GPIO_PIN_2
+#define ID_SET1_GPIO_Port GPIOF
+#define ID_SET2_Pin GPIO_PIN_3
+#define ID_SET2_GPIO_Port GPIOF
+#define ID_SET3_Pin GPIO_PIN_4
+#define ID_SET3_GPIO_Port GPIOF
+#define ID_SET4_Pin GPIO_PIN_5
+#define ID_SET4_GPIO_Port GPIOF
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */

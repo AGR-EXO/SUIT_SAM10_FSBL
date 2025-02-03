@@ -84,6 +84,7 @@ bool 				MDUpdate_init = false;
 /* test */
 uint8_t fdcantestflag = 0;
 
+uint8_t test_EOT=0;
 
 /* USER CODE END PV */
 
@@ -148,6 +149,10 @@ int main(void)
 	/* USER CODE BEGIN WHILE */
 	while (1)
 	{
+		if(test_EOT==1){
+			Test_EOT();
+		}
+
 		/* 1. Check Boot Mode */
 		if(boot_state != BOOT_ERROR)
 			boot_state = Boot_CheckUpdateMode();

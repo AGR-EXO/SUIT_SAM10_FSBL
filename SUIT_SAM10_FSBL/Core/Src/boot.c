@@ -120,7 +120,7 @@ uint8_t STX_Txbuf[64]={0,};
 int totalCRC_flash=0;
 uint16_t EOT_TotalMSGCRC=0;
 
-uint8_t MD_nodeID = 9;
+uint8_t MD_nodeID = 8;
 BootUpdateSubState MD_boot_state=BOOT_NONE;
 
 /**
@@ -304,6 +304,7 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
 		}
 
 	}while(0);
+
 
 	return ret;
 }
@@ -766,6 +767,8 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 	uint8_t retrial=0;
 
 	if(Boot_UpdateVerify((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
+//		HAL_Delay(1);
+
 		int cursor2=0;
 		//Send ACK
 		//first data frame is index 0 or 1???
@@ -787,9 +790,13 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 			ret = 100;			// tx error
 
 
-		MD_Update_Flag = 0;
 		MD_EOT_ACK_Flag ++;//= 1;
 
+		for(int i=0; i<50000; i++){
+
+		}
+
+		MD_Update_Flag = 0;
 		DATA_WriteDone=1;
 
 	}
@@ -822,6 +829,8 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 
 	}
 	TOTAL_filecrc=0;
+
+
 	return ret;
 }
 
@@ -885,4 +894,40 @@ int Send_NACK(uint16_t reqframe_idx, uint8_t retrial){
 
 	return ret;
 
+}
+
+
+void Test_EOT(){
+	int ret=0;
+	MD_boot_state=BOOT_EOT;
+
+	//No8
+	//if CRC ok ACK, else NACK send
+	uint8_t retrial=0;
+	int cursor2=0;
+	//Send ACK
+	//first data frame is index 0 or 1???
+	uint16_t next_idx=1;//DATA_FRAME_IDX_1
+	uint32_t t_fnccode=EOT;
+	memcpy(&EOT_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
+	cursor2+=sizeof(t_fnccode);
+
+	memcpy(&EOT_Txbuf[cursor2], &next_idx, sizeof(next_idx));
+	cursor2+=sizeof(next_idx);
+
+	int idx=64-cursor2;
+
+	memset(&EOT_Txbuf[cursor2],0, idx);//61
+	cursor2+=idx;//61;
+
+	uint16_t t_id = ACK | (MD_nodeID << 4) | (cm_node_id) ;
+
+	if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
+		ret = 100;			// tx error
+
+
+//	MD_Update_Flag = 0;
+	MD_EOT_ACK_Flag ++;//= 1;
+
+		//		DATA_WriteDone=1;
 }

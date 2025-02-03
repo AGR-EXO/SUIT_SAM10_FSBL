@@ -153,5 +153,6 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr);
 //uint8_t 		Boot_FileTransmitFDCAN(void);
 BootUpdateError Boot_UpdateFWfromFDCAN(uint8_t* t_destbuff, uint8_t* t_originbuff, BootFlashDevice dev, uint32_t flashAddr);
 int Send_STX(void);
+void Test_EOT();
 
 #endif /* INC_BOOT_H_ */

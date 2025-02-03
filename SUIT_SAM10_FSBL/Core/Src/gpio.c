@@ -65,6 +65,12 @@ void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOG, MCU_SW_CLR_Pin|LED_DRV_SPI_NSS_Pin, GPIO_PIN_SET);
 
+  /*Configure GPIO pins : PFPin PFPin PFPin PFPin */
+  GPIO_InitStruct.Pin = ID_SET1_Pin|ID_SET2_Pin|ID_SET3_Pin|ID_SET4_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+
   /*Configure GPIO pin : PtPin */
   GPIO_InitStruct.Pin = AUD_nSDMODE_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
