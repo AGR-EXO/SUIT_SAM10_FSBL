@@ -258,9 +258,9 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
 
 	fw_info_t *pInfo = (fw_info_t*)(flashAddr);
 
-	pInfo->fw_size=INFO_filesize;
-	pInfo->fw_crc=INFO_filecrc;
-	pInfo->fw_startAddr=INFO_startaddroffset;
+//	pInfo->fw_size=INFO_filesize;
+//	pInfo->fw_crc=INFO_filecrc;
+//	pInfo->fw_startAddr=INFO_startaddroffset;
 
 	do
 	{
@@ -516,12 +516,12 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		}
 
 		/* Write Addr : F/W App. Address + Info Address + SOME OTHER SECTOR*/
-//		wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR;//IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
-//
-//		if (IOIF_WriteFlashMassBuffered(wr_addr, &MD_FWInfoObj, SUIT_APP_FW_INFO_SIZE, 1) != IOIF_FLASH_STATUS_OK)
-//		{
-//			return BOOT_UPDATE_ERROR_FLASH_WRITE;
-//		}
+		wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR;//IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
+
+		if (IOIF_WriteFlashMassBuffered(wr_addr, &MD_FWInfoObj, SUIT_APP_FW_INFO_SIZE, 1) != IOIF_FLASH_STATUS_OK)
+		{
+			return BOOT_UPDATE_ERROR_FLASH_WRITE;
+		}
 //		f_index += SUIT_APP_FW_INFO_SIZE;
 
 
