@@ -117,7 +117,7 @@ uint8_t EOT_Txbuf[64]={0,};
 
 uint8_t STX_Txbuf[64]={0,};
 
-uint8_t MD_nodeID = 8;
+uint8_t MD_nodeID = 9;
 BootUpdateSubState MD_boot_state=BOOT_NONE;
 
 /**
@@ -201,12 +201,12 @@ BootUpdateError Boot_JumpToApp(void)
 	if(ret == BOOT_UPDATE_OK)
 	{
 		void (*SysMemBootJump)(void);
-		SysMemBootJump = (void (*)(void)) (*((uint32_t *) ((IOIF_FLASH_SECTOR_5_BANK1_ADDR + 4))));//+4bytes worth of interrupt vector at first //+ SUIT_APP_FW_INFO_SIZE + 4))));
+		SysMemBootJump = (void (*)(void)) (*((uint32_t *) ((IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE+  4))));//+4bytes worth of interrupt vector at first //+ SUIT_APP_FW_INFO_SIZE + 4))));
 
 		Boot_AllDev_DeInit();
 
-		__set_MSP(*(uint32_t*)IOIF_FLASH_SECTOR_5_BANK1_ADDR);// + SUIT_APP_FW_INFO_SIZE);
-		SCB->VTOR = IOIF_FLASH_SECTOR_5_BANK1_ADDR;// + SUIT_APP_FW_INFO_SIZE;
+		__set_MSP(*(uint32_t*)IOIF_FLASH_SECTOR_5_BANK1_ADDR+ SUIT_APP_FW_INFO_SIZE);
+		SCB->VTOR = IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE;
 
 		SysMemBootJump();
 	}
