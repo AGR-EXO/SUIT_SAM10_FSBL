@@ -120,7 +120,7 @@ uint8_t STX_Txbuf[64]={0,};
 int totalCRC_flash=0;
 uint16_t EOT_TotalMSGCRC=0;
 
-uint8_t MD_nodeID = 8;
+uint8_t MD_nodeID = 0;
 BootUpdateSubState MD_boot_state=BOOT_NONE;
 
 /**
@@ -146,6 +146,7 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff);
 static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf);
 static int Unpack_Trigger(uint32_t t_fnccode, uint8_t* t_buf);
 int Send_NACK(uint16_t reqframe_idx, uint8_t retrial);
+static uint8_t Read_Node_ID();
 
 /**
  *------------------------------------------------------------
@@ -164,6 +165,7 @@ bool Boot_HWInit(void)
 	BL_FW_VER.patch = FW_VER_PATCH;
 	BL_FW_VER.debug = FW_VER_DEBUG;
 
+	MD_nodeID=Read_Node_ID();
 	IOIF_InitFlash();											// Internal Flash Init.
 	/* FD CAN Init. */
 //	IOIF_InitFDCAN1(1);// 1 : NODE CM
@@ -318,6 +320,21 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
  *------------------------------------------------------------
  * @brief Functions intended for internal use within this module.
  */
+
+
+/* ------------------- READ NODE ID ------------------- */
+static uint8_t Read_Node_ID()
+{
+    uint8_t temp1 = 0, temp2 = 0, temp3 = 0, temp4 = 0;
+
+    temp1 = IOIF_ReadGPIOPin(IOIF_GPIO_PORT_F, IOIF_GPIO_PIN_2);
+    temp2 = IOIF_ReadGPIOPin(IOIF_GPIO_PORT_F, IOIF_GPIO_PIN_3);
+    temp3 = IOIF_ReadGPIOPin(IOIF_GPIO_PORT_F, IOIF_GPIO_PIN_4);
+    temp4 = IOIF_ReadGPIOPin(IOIF_GPIO_PORT_F, IOIF_GPIO_PIN_5);
+
+
+    return ((temp1<<3)|(temp2<<2)|(temp3<<1)|(temp4));
+}
 
 void ProcessReceivedData(const uint8_t* buffer, uint8_t* output_buffer, uint32_t size) {
     if (size != 64) {
@@ -792,7 +809,7 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 
 		MD_EOT_ACK_Flag ++;//= 1;
 
-		for(int i=0; i<50000; i++){
+		for(int i=0; i<70000; i++){
 
 		}
 
