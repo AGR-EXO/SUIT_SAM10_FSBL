@@ -55,7 +55,8 @@ uint32_t fatfs_readbyte = 0;
 //uint8_t  update_percent = 0;
 
 fw_info_t MD_FWInfoObj={0,};
-uint8_t MD_Update_Flag __attribute__((section(".MD_Update_Flag_Settings")));
+//uint8_t MD_Update_Flag __attribute__((section(".MD_Update_Flag_Settings")));
+uint32_t MD_Update_Flag=0;
 
 uint8_t MD_STX_ACK_Flag = 0;
 uint8_t MD_STX_NACK_Flag = 0;
@@ -155,6 +156,10 @@ static uint8_t Read_Node_ID();
  * @brief Functions that interface with this module.
  */
 
+void Boot_SetMDUpdateFlag(uint32_t flag){
+	MD_Update_Flag=flag;
+}
+
 bool Boot_HWInit(void)
 {
 	bool ret = true;
@@ -172,14 +177,14 @@ bool Boot_HWInit(void)
 	IOIF_InitFDCAN1(MD_nodeID);
 	IOIF_SetFDCANRxCB(IOIF_FDCAN1, IOIF_FDCAN_RXFIFO0CALLBACK, FDCAN_RX_CB);		// RX Callback Registration
 
-	MD_Update_Flag=1;
+	MD_Update_Flag=0;
 	return ret;
 }
 
 
 BootUpdateState Boot_CheckUpdateMode(void)
 {
-	BootUpdateState ret = BOOT_NORMAL;
+	BootUpdateState ret = BOOT_UPDATE_WAIT;//BOOT_NORMAL;
 
 	//No1
 	if(MD_Update_Flag==1){
@@ -403,7 +408,10 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 //				Send_NACK(0, stx_cnt);//STX
 //				stx_cnt=0;
 //			}
+
 			Send_STX();
+			MD_Update_Flag=1;
+
 			break;
 
 		case NACK:
@@ -869,6 +877,7 @@ static int Unpack_Trigger(uint32_t t_fnccode, uint8_t* t_buf){
 int Send_STX(){
 	int ret=0;
 	MD_boot_state=BOOT_STX;
+
 	//No0
 	//send Start transmission
 	uint16_t t_id = STX | (MD_nodeID << 4) | (cm_node_id) ;

@@ -44,6 +44,9 @@
 
 extern ApplicationTypeDef Appli_state;
 
+/* Define the same flash address where the variable is stored */
+#define MDUPDATEFLAG_SWITCH  ((uint32_t*)0x38000000)
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -86,6 +89,8 @@ uint8_t fdcantestflag = 0;
 
 uint8_t test_EOT=0;
 
+uint32_t time_difference = 0;
+uint32_t MDUpdateFlag=0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -93,6 +98,7 @@ void SystemClock_Config(void);
 void MX_USB_HOST_Process(void);
 
 /* USER CODE BEGIN PFP */
+uint32_t ReadMDUpdateFlag();
 
 
 
@@ -114,6 +120,8 @@ int main(void)
 	/* USER CODE BEGIN 1 */
 	uint32_t upgrade_pretime = 0;
 	uint32_t upgrade_current_time=0;
+
+	uint32_t main_start_time=0;
 
 	/* USER CODE END 1 */
 
@@ -138,10 +146,18 @@ int main(void)
 	MX_DMA_Init();
 	MX_FDCAN1_Init();
 	/* USER CODE BEGIN 2 */
+	MDUpdateFlag = ReadMDUpdateFlag();
+
+	__enable_irq();
+	main_start_time = HAL_GetTick();
+
+
+//	__disable_irq();
 
 	/* HW Init. */
 	if(Boot_HWInit() != true)
 		boot_state = BOOT_ERROR;
+
 
 	/* USER CODE END 2 */
 
@@ -149,6 +165,22 @@ int main(void)
 	/* USER CODE BEGIN WHILE */
 	while (1)
 	{
+
+		if(MDUpdateFlag == 1){
+			boot_state = BOOT_MD_UPDATE;
+			Send_STX();
+			Boot_SetMDUpdateFlag(1);
+			MDUpdateFlag=0;
+		}
+		/* Check timeout condition */
+//		if (HAL_GetTick() - main_start_time > 40000 && boot_state != BOOT_MD_UPDATE)
+//		time_difference = HAL_GetTick() - main_start_time;
+//		if (time_difference > 4000 && boot_state != BOOT_MD_UPDATE)
+//		if (boot_state != BOOT_MD_UPDATE)
+//		{
+//			Boot_JumpToApp();
+//		}
+
 		if(test_EOT==1){
 			Test_EOT();
 		}
@@ -277,6 +309,11 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
+
+uint32_t ReadMDUpdateFlag()
+{
+    return *MDUPDATEFLAG_SWITCH;
+}
 
 
 

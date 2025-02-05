@@ -61,6 +61,7 @@ typedef enum _BootUpdateState
 	BOOT_USB_UPDATE,			//usb update mode
 	BOOT_FLASH,					//copy file only to flash
 	BOOT_MD_UPDATE,
+	BOOT_UPDATE_WAIT,
 
 	BOOT_ERROR = 99,
 } BootUpdateState;
@@ -154,5 +155,6 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr);
 BootUpdateError Boot_UpdateFWfromFDCAN(uint8_t* t_destbuff, uint8_t* t_originbuff, BootFlashDevice dev, uint32_t flashAddr);
 int Send_STX(void);
 void Test_EOT();
+void Boot_SetMDUpdateFlag(uint32_t flag);
 
 #endif /* INC_BOOT_H_ */
