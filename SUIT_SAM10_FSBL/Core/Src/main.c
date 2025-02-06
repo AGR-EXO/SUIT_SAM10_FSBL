@@ -99,7 +99,7 @@ void MX_USB_HOST_Process(void);
 
 /* USER CODE BEGIN PFP */
 uint32_t ReadMDUpdateFlag();
-
+void BL_LED_Blinking();
 
 
 /* USER CODE END PFP */
@@ -166,11 +166,13 @@ int main(void)
 	while (1)
 	{
 
+		BL_LED_Blinking();
 		if(MDUpdateFlag == 1){
 			boot_state = BOOT_MD_UPDATE;
 			Send_STX();
 			Boot_SetMDUpdateFlag(1);
 			MDUpdateFlag=0;
+			memset(MDUPDATEFLAG_SWITCH,0,4);
 		}
 		/* Check timeout condition */
 //		if (HAL_GetTick() - main_start_time > 40000 && boot_state != BOOT_MD_UPDATE)
@@ -315,8 +317,17 @@ uint32_t ReadMDUpdateFlag()
     return *MDUPDATEFLAG_SWITCH;
 }
 
+void BL_LED_Blinking() {
+    static uint32_t previous_time = 0;
+    const uint32_t blink_interval = 250;
 
+    uint32_t current_time = HAL_GetTick();  // Get current time
 
+    if ((current_time - previous_time) >= blink_interval) {
+        IOIF_ToggleGPIOPin(IOIF_GPIO_PORT_D, IOIF_GPIO_PIN_13);  // Toggle LED
+        previous_time = current_time;  // Update last toggle time
+    }
+}
 /* USER CODE END 4 */
 
 /**

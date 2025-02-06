@@ -109,6 +109,9 @@ void Error_Handler(void);
 #define ID_SET3_GPIO_Port GPIOF
 #define ID_SET4_Pin GPIO_PIN_5
 #define ID_SET4_GPIO_Port GPIOF
+
+#define STATUS_LED_B_Pin GPIO_PIN_13
+#define STATUS_LED_B_GPIO_Port GPIOD
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
