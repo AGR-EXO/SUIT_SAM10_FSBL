@@ -167,6 +167,11 @@ int main(void)
 	{
 
 		BL_LED_Blinking();
+		/* 1. Check Boot Mode */
+		if(boot_state != BOOT_ERROR)
+			boot_state = Boot_CheckUpdateMode();
+
+
 		if(MDUpdateFlag == 1){
 			boot_state = BOOT_MD_UPDATE;
 			Send_STX();
@@ -175,53 +180,17 @@ int main(void)
 			memset(MDUPDATEFLAG_SWITCH,0,4);
 		}
 		/* Check timeout condition */
-//		if (HAL_GetTick() - main_start_time > 40000 && boot_state != BOOT_MD_UPDATE)
 //		time_difference = HAL_GetTick() - main_start_time;
 //		if (time_difference > 4000 && boot_state != BOOT_MD_UPDATE)
-//		if (boot_state != BOOT_MD_UPDATE)
-//		{
-//			Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR);
-//		}
-
-		if(test_EOT==1){
-			Test_EOT();
+		if (boot_state != BOOT_MD_UPDATE)
+		{
+			Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR);
 		}
 
-		/* 1. Check Boot Mode */
-		if(boot_state != BOOT_ERROR)
-			boot_state = Boot_CheckUpdateMode();
-
-		/* 2. File copy from USB to Flash */
 		if(boot_state == BOOT_MD_UPDATE)
 		{
 			boot_is_Upgrade = true;
-			upgrade_pretime = HAL_GetTick();
-
-			//Start update
-//			while(boot_is_Upgrade)
-//			{
-//			//No2
-//				if (MDUpdatedFlag == true)
-//				{
-//					if(MDUpdate_init == false){
-//						//send CM update flag STX msg
-//						Send_STX();
-//						if(MD_STX_ACK_Flag == 1){
-//							MDUpdate_init = true;
-//						}
-//					}
-//				}
-//			}
-
-			upgrade_current_time = HAL_GetTick();
-
-			if(upgrade_current_time - upgrade_pretime > 10000)
-			{
-				boot_state = BOOT_ERROR;
-				break;		//timeout
-			}
-
-		}	//end of while loop
+		}
 
 
 		/* 5. Normal Boot */
