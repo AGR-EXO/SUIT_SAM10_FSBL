@@ -150,6 +150,8 @@ BootUpdateError Boot_UpdateFWfromFile(FATFS* fs, FIL* fileobject, uint8_t* filen
 bool 			Boot_CM_CopyBinQSPItoFlash(void);
 bool 			Boot_AllDev_DeInit(void);// QSPI to Internal Flash
 BootUpdateError Boot_UpdateVerify(uint32_t flashAddr);
+BootUpdateError Boot_EraseCurrentMDFW(uint32_t flashAddr);
+BootUpdateError Boot_SaveNewMDFW(uint32_t flashAddr);
 
 //uint8_t 		Boot_FileTransmitFDCAN(void);
 BootUpdateError Boot_UpdateFWfromFDCAN(uint8_t* t_destbuff, uint8_t* t_originbuff, BootFlashDevice dev, uint32_t flashAddr);

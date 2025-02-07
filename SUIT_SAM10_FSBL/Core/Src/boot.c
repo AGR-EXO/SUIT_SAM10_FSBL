@@ -317,6 +317,70 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
 }
 
 
+BootUpdateError Boot_EraseCurrentMDFW(uint32_t flashAddr)
+{
+	BootUpdateError ret = BOOT_UPDATE_OK;
+
+	//Erase flash sector of new fw
+	uint8_t sector_idx = 0; // the sector where i want to write the new firmware
+	uint8_t erase_sector = (MD_FWInfoObj.fw_size + SUIT_APP_FW_INFO_SIZE) / (uint32_t) STM32H743_IFLASH_SECTOR_SIZE + 1;
+
+	while(sector_idx < erase_sector)
+	{
+		if(IOIF_EraseFlash(flashAddr + (sector_idx * STM32H743_IFLASH_SECTOR_SIZE), false) != IOIF_FLASH_STATUS_OK)
+		{
+			return ret = BOOT_UPDATE_ERROR_FLASH_ERASE;
+		}
+		IOIF_SetCurrFlashAddr(0);
+
+		f_index = 0;
+		sector_idx++;
+	}
+
+	/* Write Addr : F/W App. Address + Info Address + SOME OTHER SECTOR*/
+//	if (IOIF_WriteFlashMassBuffered(flashAddr, &pInfo, SUIT_APP_FW_INFO_SIZE, 1) != IOIF_FLASH_STATUS_OK)
+//	if (IOIF_WriteFlashMassBuffered(flashAddr, &MD_FWInfoObj, SUIT_APP_FW_INFO_SIZE, 1) != IOIF_FLASH_STATUS_OK)	{
+//		return BOOT_UPDATE_ERROR_FLASH_WRITE;
+//	}
+
+	return ret;
+}
+
+
+BootUpdateError Boot_SaveNewMDFW(uint32_t flashAddr)
+{
+	BootUpdateError ret = BOOT_UPDATE_OK;
+    uint32_t srcAddr = IOIF_FLASH_SECTOR_5_BANK1_ADDR; // Flash Bank 1 Sector 5 시작 주소
+    fw_bin_size = MD_FWInfoObj.fw_size+SUIT_APP_FW_INFO_SIZE;
+    uint8_t buffer[1024]; // 읽기/쓰기 버퍼
+    uint32_t f_index = 0;
+
+    while (f_index < fw_bin_size)
+    {
+        uint32_t wr_size = (fw_bin_size - f_index > 60) ? 60 : (fw_bin_size - f_index);
+        uint32_t wr_addr = flashAddr + f_index;//SUIT_APP_FW_INFO_SIZE + f_index;
+
+        // Flash에서 데이터를 읽어오기
+        if (IOIF_ReadFlash(srcAddr + f_index, buffer, wr_size) != IOIF_FLASH_STATUS_OK)
+        {
+            return BOOT_UPDATE_ERROR_FLASH_READ;
+        }
+
+        // 마지막 chunk인지 확인
+        uint8_t triggerWrite = (f_index + wr_size >= fw_bin_size);
+//        DATA_triggerWrite = triggerWrite;
+
+        // Flash에 데이터 쓰기
+        if (IOIF_WriteFlashMassBuffered(wr_addr, buffer, wr_size, triggerWrite) != IOIF_FLASH_STATUS_OK)
+        {
+            return BOOT_UPDATE_ERROR_FLASH_WRITE;
+        }
+
+        f_index += wr_size;
+    }
+
+	return ret;
+}
 
 
 /**
@@ -786,44 +850,43 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 	int ret=0;
 	MD_boot_state=BOOT_EOT;
-
 	//No8
 	//if CRC ok ACK, else NACK send
 	uint8_t retrial=0;
 
 	if(Boot_UpdateVerify((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
 //		HAL_Delay(1);
+		if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
+			if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
+				int cursor2=0;
+				//Send ACK
+				uint16_t next_idx=1;//DATA_FRAME_IDX_1
+				memcpy(&EOT_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
+				cursor2+=sizeof(t_fnccode);
 
-		int cursor2=0;
-		//Send ACK
-		//first data frame is index 0 or 1???
-		uint16_t next_idx=1;//DATA_FRAME_IDX_1
-		memcpy(&EOT_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
-		cursor2+=sizeof(t_fnccode);
+				memcpy(&EOT_Txbuf[cursor2], &next_idx, sizeof(next_idx));
+				cursor2+=sizeof(next_idx);
 
-		memcpy(&EOT_Txbuf[cursor2], &next_idx, sizeof(next_idx));
-		cursor2+=sizeof(next_idx);
+				int idx=64-cursor2;
 
-		int idx=64-cursor2;
+				memset(&EOT_Txbuf[cursor2],0, idx);//61
+				cursor2+=idx;//61;
 
-		memset(&EOT_Txbuf[cursor2],0, idx);//61
-		cursor2+=idx;//61;
+				uint16_t t_id = ACK | (MD_nodeID << 4) | (cm_node_id) ;
 
-		uint16_t t_id = ACK | (MD_nodeID << 4) | (cm_node_id) ;
+				if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
+					ret = 100;			// tx error
 
-		if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
-			ret = 100;			// tx error
+				MD_EOT_ACK_Flag ++;//= 1;
 
+				for(int i=0; i<70000; i++){
 
-		MD_EOT_ACK_Flag ++;//= 1;
+				}
 
-		for(int i=0; i<70000; i++){
-
+				MD_Update_Flag = 0;
+				DATA_WriteDone=1;
+			}
 		}
-
-		MD_Update_Flag = 0;
-		DATA_WriteDone=1;
-
 	}
 	else{
 		//Send NACK
