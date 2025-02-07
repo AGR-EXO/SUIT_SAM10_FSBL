@@ -200,7 +200,7 @@ BootUpdateState Boot_CheckUpdateMode(void)
 }
 
 
-BootUpdateError Boot_JumpToApp(void)
+BootUpdateError Boot_JumpToApp(uint32_t flashAddr)
 {
 	BootUpdateError ret = BOOT_UPDATE_OK;
 
@@ -211,12 +211,12 @@ BootUpdateError Boot_JumpToApp(void)
 	if(ret == BOOT_UPDATE_OK)
 	{
 		void (*SysMemBootJump)(void);
-		SysMemBootJump = (void (*)(void)) (*((uint32_t *) ((IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE+  4))));//+4bytes worth of interrupt vector at first //+ SUIT_APP_FW_INFO_SIZE + 4))));
+		SysMemBootJump = (void (*)(void)) (*((uint32_t *) ((flashAddr + SUIT_APP_FW_INFO_SIZE+  4))));//+4bytes worth of interrupt vector at first //+ SUIT_APP_FW_INFO_SIZE + 4))));
 
 		Boot_AllDev_DeInit();
 
-		__set_MSP(*(uint32_t*)IOIF_FLASH_SECTOR_5_BANK1_ADDR+ SUIT_APP_FW_INFO_SIZE);
-		SCB->VTOR = IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE;
+		__set_MSP(*(uint32_t*)flashAddr+ SUIT_APP_FW_INFO_SIZE);
+		SCB->VTOR = flashAddr + SUIT_APP_FW_INFO_SIZE;
 
 		SysMemBootJump();
 	}

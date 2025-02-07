@@ -145,7 +145,7 @@ extern uint8_t MD_EOT_ACK_Flag;
 
 bool			Boot_HWInit(void);
 BootUpdateState Boot_CheckUpdateMode(void);																						// Check Update Mode
-BootUpdateError	Boot_JumpToApp(void);																							// Jump to Application
+BootUpdateError	Boot_JumpToApp(uint32_t flashAddr);																							// Jump to Application
 BootUpdateError Boot_UpdateFWfromFile(FATFS* fs, FIL* fileobject, uint8_t* filename, BootFlashDevice dev, uint32_t flashAddr);	// Copy file from USB to QSPI
 bool 			Boot_CM_CopyBinQSPItoFlash(void);
 bool 			Boot_AllDev_DeInit(void);// QSPI to Internal Flash

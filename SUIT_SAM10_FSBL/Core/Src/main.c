@@ -180,7 +180,7 @@ int main(void)
 //		if (time_difference > 4000 && boot_state != BOOT_MD_UPDATE)
 //		if (boot_state != BOOT_MD_UPDATE)
 //		{
-//			Boot_JumpToApp();
+//			Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR);
 //		}
 
 		if(test_EOT==1){
@@ -228,7 +228,7 @@ int main(void)
 		else if(boot_state == BOOT_NORMAL)
 		{
 			boot_is_jump = true;
-			if(Boot_JumpToApp() != BOOT_UPDATE_OK)
+			if(Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR) != BOOT_UPDATE_OK)
 				boot_state = BOOT_ERROR;
 		}
 
