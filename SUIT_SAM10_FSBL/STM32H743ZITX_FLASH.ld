@@ -46,8 +46,6 @@ MEMORY
   FLASH (rx)     : ORIGIN = 0x08000000, LENGTH = 128K
   DTCMRAM (xrw)  : ORIGIN = 0x20000000, LENGTH = 128K
   RAM_D1 (xrw)   : ORIGIN = 0x24000000, LENGTH = 512K
-  RAM_D2 (xrw)   : ORIGIN = 0x30000000, LENGTH = 288K
-  RAM_D3 (xrw)   : ORIGIN = 0x38000000, LENGTH = 64K
   ITCMRAM (xrw)  : ORIGIN = 0x00000000, LENGTH = 64K
 }
 
@@ -151,16 +149,6 @@ SECTIONS
     __bss_end__ = _ebss;
   } >RAM_D1
 
- /********************************************************************/
-  /* Startup Settings Variables-> attribute RAM D3 domain 0x38000000 ~ */
-  /********************************************************************/
-  .startup_settings (NOLOAD) :
-  {
-  	. = ABSOLUTE(0x38000000);
-    /* FW update */
-  	*(.MD_Update_Flag_Settings)
-
-  } >RAM_D3
   /********************************************************************/
   
   /* User_heap_stack section, used to check that there is enough RAM left */
