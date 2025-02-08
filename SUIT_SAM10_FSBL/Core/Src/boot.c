@@ -84,7 +84,8 @@ uint32_t INFO_filesize;
 uint32_t INFO_startaddroffset;
 uint16_t INFO_filecrc;// (total)
 uint16_t INFO_totaldataindex;// (number of data frames)
-//nothing for 50 byte
+fw_version_t INFO_fwversion;
+//nothing for 45 byte
 uint16_t INFO_msgcrc;// (current)
 uint16_t INFO_msgcrc_compare;// (current)
 
@@ -168,7 +169,7 @@ bool Boot_HWInit(void)
 	BL_FW_VER.major = FW_VER_MAJOR;
 	BL_FW_VER.minor = FW_VER_MINOR;
 	BL_FW_VER.patch = FW_VER_PATCH;
-	BL_FW_VER.debug = FW_VER_DEBUG;
+//	BL_FW_VER.debug = FW_VER_DEBUG;
 
 	MD_nodeID=Read_Node_ID();
 	IOIF_InitFlash();											// Internal Flash Init.
@@ -542,7 +543,8 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	uint32_t t_start_addr_offset;
 	uint16_t t_file_crc;// (total)
 	uint16_t t_total_data_index;// (number of data frames)
-	//nothing for 50 byte
+	fw_version_t t_fwversion;
+	//nothing for 47 byte
 	uint16_t t_infomsgcrc;// (current)
 	uint16_t t_infomsgcrc_compare=0;// (current)
 
@@ -569,7 +571,12 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	t_cursor += sizeof(t_total_data_index);
 	INFO_totaldataindex = t_total_data_index;//4381;//
 
-	t_cursor += 50;
+	memcpy(&t_fwversion, &INFO_outputBuff[t_cursor],sizeof(t_total_data_index));
+	t_cursor += sizeof(t_fwversion);
+	INFO_fwversion = t_fwversion;//4381;//
+	MD_FWInfoObj.app_fw_ver = t_fwversion;
+
+	t_cursor += 47;
 	memcpy(&t_infomsgcrc, &INFO_outputBuff[t_cursor],sizeof(t_infomsgcrc));
 //    t_infomsgcrc= ((uint16_t)t_buff[t_cursor] << 8) | t_buff[t_cursor+1];
 	t_cursor += sizeof(t_infomsgcrc);

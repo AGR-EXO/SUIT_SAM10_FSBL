@@ -182,10 +182,10 @@ int main(void)
 		/* Check timeout condition */
 //		time_difference = HAL_GetTick() - main_start_time;
 //		if (time_difference > 4000 && boot_state != BOOT_MD_UPDATE)
-		if (boot_state != BOOT_MD_UPDATE)
-		{
-			Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR);
-		}
+//		if (boot_state != BOOT_MD_UPDATE)
+//		{
+//			Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR);
+//		}
 
 		if(boot_state == BOOT_MD_UPDATE)
 		{

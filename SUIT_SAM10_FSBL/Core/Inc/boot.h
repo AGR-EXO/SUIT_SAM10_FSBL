@@ -107,7 +107,7 @@ typedef struct _fw_version_t
 	uint8_t  major;
 	uint8_t  minor;
 	uint8_t  patch;
-	uint16_t debug;
+//	uint16_t debug;
 } fw_version_t;
 
 
