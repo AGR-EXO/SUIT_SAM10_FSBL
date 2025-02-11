@@ -110,7 +110,7 @@ IOIF_FLASHState_t IOIF_EraseFlash(uint32_t startSector, bool eraseAll)
         eraseInit.NbSectors = IOIF_NUM_SECTORS;
         eraseInit.VoltageRange = BSP_FLASH_VOLTAGE_RANGE_3;
 
-        if (startSector <= IOIF_FLASH_SECTOR_6_BANK1_ADDR) {
+        if (startSector <= IOIF_FLASH_SECTOR_0_BANK2_ADDR) {
             eraseInit.Banks = BSP_FLASH_BANK_1;
         } else {
             eraseInit.Banks = BSP_FLASH_BANK_2;
@@ -333,29 +333,15 @@ IOIF_FLASHState_t IOIF_ReadFlash(uint32_t flashAddr, void* pData, uint32_t lengt
   */
 static uint32_t GetSector(uint32_t addr)
 {
-    const uint32_t sectorsBank1[] = {
-        IOIF_FLASH_SECTOR_0_BANK1_ADDR, IOIF_FLASH_SECTOR_1_BANK1_ADDR, IOIF_FLASH_SECTOR_2_BANK1_ADDR, IOIF_FLASH_SECTOR_3_BANK1_ADDR,
-        IOIF_FLASH_SECTOR_4_BANK1_ADDR, IOIF_FLASH_SECTOR_5_BANK1_ADDR, IOIF_FLASH_SECTOR_6_BANK1_ADDR, IOIF_FLASH_SECTOR_7_BANK1_ADDR
-    };
+	if (addr >= IOIF_FLASH_SECTOR_0_BANK1_ADDR && addr < IOIF_FLASH_SECTOR_0_BANK2_ADDR) {
+		return (addr - IOIF_FLASH_SECTOR_0_BANK1_ADDR) / IOIF_FLASH_SECTOR_SIZE;
+	}
+	else if (addr >= IOIF_FLASH_SECTOR_0_BANK2_ADDR && addr < (IOIF_FLASH_SECTOR_0_BANK2_ADDR + (IOIF_FLASH_SECTOR_COUNT * IOIF_FLASH_SECTOR_SIZE))) {
+		return (addr - IOIF_FLASH_SECTOR_0_BANK2_ADDR) / IOIF_FLASH_SECTOR_SIZE;
+	}
 
-    const uint32_t sectorsBank2[] = {
-        IOIF_FLASH_SECTOR_0_BANK2_ADDR, IOIF_FLASH_SECTOR_1_BANK2_ADDR, IOIF_FLASH_SECTOR_2_BANK2_ADDR, IOIF_FLASH_SECTOR_3_BANK2_ADDR,
-        IOIF_FLASH_SECTOR_4_BANK2_ADDR, IOIF_FLASH_SECTOR_5_BANK2_ADDR, IOIF_FLASH_SECTOR_6_BANK2_ADDR, IOIF_FLASH_SECTOR_7_BANK2_ADDR
-    };
-
-    for (uint32_t i = 0; i < 7; i++) {
-        if (addr < sectorsBank1[i + 1]) {
-            return i;
-        }
-    }
-
-    for (uint32_t i = 0; i < 7; i++) {
-        if (addr < sectorsBank2[i + 1]) {
-            return i;
-        }
-    }
-
-    return BSP_FLASH_SECTOR_7; // Default return value if no matching sector is found.
+	// 잘못된 주소일 경우 기본적으로 마지막 섹터 반환
+	return IOIF_FLASH_SECTOR_COUNT - 1;
 }
 
 

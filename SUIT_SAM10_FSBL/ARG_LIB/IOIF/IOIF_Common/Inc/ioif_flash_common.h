@@ -75,6 +75,10 @@
 
 #define IOIF_ALIGN_TO_4BYTES(length)   ((length + 3) & ~0x03)
 
+#define IOIF_FLASH_SECTOR_COUNT 	8
+#define IOIF_FLASH_SECTOR_SIZE  	0x20000  // 128KB
+
+
 /**
  * @defgroup FLASH_SECTOR_ADDRESSES Flash Sector Base Addresses
  * @{
