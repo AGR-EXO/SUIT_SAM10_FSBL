@@ -17,6 +17,8 @@
  * @brief Enumerated types and structures central to this module.
  */
 
+#define FLASH_BUFFER_SIZE 1024
+#define FLASH_WORD_SIZE 32
 
 
 
@@ -26,38 +28,25 @@
  *------------------------------------------------------------
  * @brief Variables accessible throughout the application.
  */
+//Node ID
+uint8_t cm_node_id = 1;
+uint8_t MD_nodeID = 0;
+uint8_t  ori_node;
+uint32_t fnc_code;
+uint8_t fdcan_rx_test_buf[64] = {0,};
+int cb_cnt=0;
 
+//FW Info Object
 fw_version_t BL_FW_VER;
-
-
-extern USBH_HandleTypeDef hUsbHostFS;
-extern SPI_HandleTypeDef hspi1;
-extern DMA_HandleTypeDef hdma_spi1_rx;
-extern DMA_HandleTypeDef hdma_spi1_tx;
-extern SAI_HandleTypeDef hsai_BlockA1;
-extern DMA_HandleTypeDef hdma_sai1_a;
-
-
-static volatile bool pwr_btn_pressed = false;
-static volatile bool assist_plus_btn_pressed = false;
-static volatile bool assist_minus_btn_pressed = false;
-
-
-//FRESULT boot_mount_res = FR_NOT_READY;
-FRESULT boot_open_res = FR_NOT_READY;
-FRESULT boot_read_res = FR_NOT_READY;
-IOIF_FLASHState_t Flash_Write_res;
-
-uint32_t fatfs_readbyte = 0;
-
-//uint32_t fw_bin_size = 0;
-//uint32_t f_index = 0;
-//uint8_t  update_percent = 0;
-
 fw_info_t MD_FWInfoObj={0,};
-//uint8_t MD_Update_Flag __attribute__((section(".MD_Update_Flag_Settings")));
+
+//MD Update Flag
 uint32_t MD_Update_Flag=0;
 
+//BOOT STATE
+BootUpdateSubState MD_boot_state=BOOT_NONE;
+
+//ACK/NACK Flag
 uint8_t MD_STX_ACK_Flag = 0;
 uint8_t MD_STX_NACK_Flag = 0;
 uint16_t MD_Info_ACK_Flag = 0;
@@ -67,19 +56,10 @@ uint16_t MD_Data_NACK_Flag = 0;
 uint8_t MD_EOT_ACK_Flag = 0;
 uint8_t MD_EOT_NACK_Flag = 0;
 
-
-//uint8_t fdcan_tx_buf_test [64] = {0,};
-//
-uint8_t cm_node_id = 1;
-//uint8_t dest_id = 3;
-//uint16_t magic_code = 555;
-
-
-uint8_t fdcan_rx_test_buf[64] = {0,};
-uint8_t  ori_node;
-uint32_t fnc_code;
-
-
+//STX
+uint8_t stx_cnt=0;
+uint8_t STX_Txbuf[64]={0,};
+//INFO
 uint32_t INFO_filesize;
 uint32_t INFO_startaddroffset;
 uint16_t INFO_filecrc;// (total)
@@ -88,42 +68,23 @@ fw_version_t INFO_fwversion;
 //nothing for 45 byte
 uint16_t INFO_msgcrc;// (current)
 uint16_t INFO_msgcrc_compare;// (current)
-
 uint8_t INFO_Txbuf[64]={0,};
 uint8_t INFO_Rxbuf[64]={0,};
-
-int TOTAL_filecrc=0;
-int TOTAL_filesize=0;
-
-#define FLASH_BUFFER_SIZE 1024
-#define FLASH_WORD_SIZE 32
-
-static uint8_t flashReadBuffer[FLASH_BUFFER_SIZE];
-
-
+//DATA
 uint16_t DATA_indexnumber;//Current
 uint8_t DATA_Rxbuf[60]={0,};
 uint8_t DATA_Txbuf[64]={0,};
 uint16_t DATA_msgcrc;// (current)
 uint16_t DATA_msgcrc_compare;
-
 uint32_t wr_size;
 uint32_t fw_bin_size =0;
 uint32_t f_index = 0;
-
 uint8_t DATA_triggerWrite=0;
 static uint16_t expected_index = 0; // Keep track of the expected index (starting at 0)
 uint8_t DATA_WriteDone=0;
-
+//EOT
 uint8_t EOT_Txbuf[64]={0,};
 
-uint8_t STX_Txbuf[64]={0,};
-
-int totalCRC_flash=0;
-uint16_t EOT_TotalMSGCRC=0;
-
-uint8_t MD_nodeID = 0;
-BootUpdateSubState MD_boot_state=BOOT_NONE;
 
 /**
  *------------------------------------------------------------
@@ -141,14 +102,12 @@ BootUpdateSubState MD_boot_state=BOOT_NONE;
  *------------------------------------------------------------
  * @brief Static Function prototypes for this module.
  */
-
+static uint8_t Read_Node_ID();
 static int  FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData);
+static void ProcessReceivedData(const uint8_t* buffer, uint8_t* output_buffer, uint32_t size);
 static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff);
 static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff);
 static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf);
-static int Unpack_Trigger(uint32_t t_fnccode, uint8_t* t_buf);
-int Send_NACK(uint16_t reqframe_idx, uint8_t retrial);
-static uint8_t Read_Node_ID();
 
 /**
  *------------------------------------------------------------
@@ -156,6 +115,7 @@ static uint8_t Read_Node_ID();
  *------------------------------------------------------------
  * @brief Functions that interface with this module.
  */
+
 
 void Boot_SetMDUpdateFlag(uint32_t flag){
 	MD_Update_Flag=flag;
@@ -174,7 +134,6 @@ bool Boot_HWInit(void)
 	MD_nodeID=Read_Node_ID();
 	IOIF_InitFlash();											// Internal Flash Init.
 	/* FD CAN Init. */
-//	IOIF_InitFDCAN1(1);// 1 : NODE CM
 	IOIF_InitFDCAN1(MD_nodeID);
 	IOIF_SetFDCANRxCB(IOIF_FDCAN1, IOIF_FDCAN_RXFIFO0CALLBACK, FDCAN_RX_CB);		// RX Callback Registration
 
@@ -250,8 +209,6 @@ bool Boot_AllDev_DeInit(void)
 
 }
 
-
-
 BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
 {
 	BootUpdateError ret = BOOT_UPDATE_OK;
@@ -265,10 +222,6 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
 	uint32_t read_buf_len = 0;
 
 	fw_info_t *pInfo = (fw_info_t*)(flashAddr);
-
-//	pInfo->fw_size=INFO_filesize;
-//	pInfo->fw_crc=INFO_filecrc;
-//	pInfo->fw_startAddr=INFO_startaddroffset;
 
 	do
 	{
@@ -338,12 +291,6 @@ BootUpdateError Boot_EraseCurrentMDFW(uint32_t flashAddr)
 		sector_idx++;
 	}
 
-	/* Write Addr : F/W App. Address + Info Address + SOME OTHER SECTOR*/
-//	if (IOIF_WriteFlashMassBuffered(flashAddr, &pInfo, SUIT_APP_FW_INFO_SIZE, 1) != IOIF_FLASH_STATUS_OK)
-//	if (IOIF_WriteFlashMassBuffered(flashAddr, &MD_FWInfoObj, SUIT_APP_FW_INFO_SIZE, 1) != IOIF_FLASH_STATUS_OK)	{
-//		return BOOT_UPDATE_ERROR_FLASH_WRITE;
-//	}
-
 	return ret;
 }
 
@@ -383,6 +330,51 @@ BootUpdateError Boot_SaveNewMDFW(uint32_t flashAddr)
 	return ret;
 }
 
+int Send_STX(){
+	int ret=0;
+	MD_boot_state=BOOT_STX;
+
+	//send Start transmission
+	uint16_t t_id = STX | (MD_nodeID << 4) | (cm_node_id) ;
+	uint8_t array[8]={0,};
+	if(IOIF_TransmitFDCAN1(t_id, array , 8) != 0){
+		ret = 100;			// tx error
+	}
+
+	MD_STX_ACK_Flag ++;
+
+	return ret;
+}
+
+int Send_NACK(uint16_t reqframe_idx, uint8_t retrial){
+	int ret = 0;
+	//Send NACK
+	int cursor2=0;
+	int t_fnccode = NACK;
+	memcpy(&STX_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
+	cursor2+=sizeof(t_fnccode);
+
+	memcpy(&STX_Txbuf[cursor2], &reqframe_idx, sizeof(reqframe_idx));
+	cursor2+=sizeof(reqframe_idx);
+
+	memcpy(&STX_Txbuf[cursor2], &retrial, sizeof(retrial));
+	cursor2+=sizeof(retrial);
+
+	retrial++;
+
+	int idx=64-cursor2;
+	memset(&STX_Txbuf[cursor2], 0, idx);
+	cursor2+=idx;
+
+	uint16_t t_id = NACK | (MD_nodeID << 4)|(cm_node_id) ;
+
+	if(IOIF_TransmitFDCAN1(t_id, STX_Txbuf, 64) != 0)
+		ret = 100;			// tx error
+
+	return ret;
+
+}
+
 
 /**
  *------------------------------------------------------------
@@ -396,17 +388,70 @@ BootUpdateError Boot_SaveNewMDFW(uint32_t flashAddr)
 static uint8_t Read_Node_ID()
 {
     uint8_t temp1 = 0, temp2 = 0, temp3 = 0, temp4 = 0;
-
     temp1 = IOIF_ReadGPIOPin(IOIF_GPIO_PORT_F, IOIF_GPIO_PIN_2);
     temp2 = IOIF_ReadGPIOPin(IOIF_GPIO_PORT_F, IOIF_GPIO_PIN_3);
     temp3 = IOIF_ReadGPIOPin(IOIF_GPIO_PORT_F, IOIF_GPIO_PIN_4);
     temp4 = IOIF_ReadGPIOPin(IOIF_GPIO_PORT_F, IOIF_GPIO_PIN_5);
-
-
     return ((temp1<<3)|(temp2<<2)|(temp3<<1)|(temp4));
 }
 
-void ProcessReceivedData(const uint8_t* buffer, uint8_t* output_buffer, uint32_t size) {
+static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
+{
+	cb_cnt++;
+	// Extract origin node (upper byte)
+	ori_node = (id >> 4) & 0x0F; // Shift right by 4 bits and mask with 0x0F
+    // Extract destination node (lower nibble)
+	fnc_code = id & 0x700;   // Mask with 0x0F to get the lower nibble
+	memcpy(fdcan_rx_test_buf, rx_pData, 64);
+
+	switch (fnc_code){
+		case FW_UPDATE:
+			Send_STX();
+			MD_Update_Flag=1;
+
+			break;
+
+		case NACK:
+			if(stx_cnt<3){
+				Send_STX();
+				stx_cnt++;
+			}
+			else{
+				Send_NACK(0, stx_cnt);//STX
+				stx_cnt=0;
+			}
+			break;
+
+		case Info_MSG:
+			if (Unpack_InfoMsg(fnc_code, fdcan_rx_test_buf) == 0) {
+			} else{
+				//Send NACK to CM
+			}
+			break;
+
+		case Data_MSG:
+			if (Unpack_DataMsg(fnc_code, fdcan_rx_test_buf) == 0) {
+			} else{
+				//Send NACK to CM
+			}
+			break;
+
+		case EOT:
+			//receive EOT, do CRC on whole file
+			if(Unpack_EOT(fnc_code, fdcan_rx_test_buf)==0){
+			} else{
+				//Send NACK to CM
+			}
+			break;
+
+		default: break;
+	}
+
+	return 0;
+}
+
+
+static void ProcessReceivedData(const uint8_t* buffer, uint8_t* output_buffer, uint32_t size) {
     if (size != 64) {
         // Ensure the buffer is exactly 64 bytes
         return;
@@ -451,89 +496,6 @@ void ProcessReceivedData(const uint8_t* buffer, uint8_t* output_buffer, uint32_t
     output_buffer[63] = temp;
 }
 
-
-
-uint8_t stx_cnt=0;
-int cb_cnt=0;
-static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
-{
-	cb_cnt++;
-	// Extract origin node (upper byte)
-	ori_node = (id >> 4) & 0x0F; // Shift right by 4 bits and mask with 0x0F
-    // Extract destination node (lower nibble)
-	fnc_code = id & 0x700;   // Mask with 0x0F to get the lower nibble
-	memcpy(fdcan_rx_test_buf, rx_pData, 64);
-
-	switch (fnc_code){
-		case FW_UPDATE:
-//			if(Send_STX() == 0){
-//
-//			}
-//			else{
-//				Send_NACK(0, stx_cnt);//STX
-//				stx_cnt=0;
-//			}
-
-			Send_STX();
-			MD_Update_Flag=1;
-
-			break;
-
-		case NACK:
-			if(stx_cnt<3){
-				Send_STX();
-				stx_cnt++;
-			}
-			else{
-				Send_NACK(0, stx_cnt);//STX
-				stx_cnt=0;
-			}
-			break;
-
-		case Info_MSG:
-
-			if (Unpack_InfoMsg(fnc_code, fdcan_rx_test_buf) == 0) {
-			} else{
-				//Send NACK to CM
-				//if(Boot_UpdateFWfromFile(&loaderfs, &loaderfile_MD, (uint8_t*)MD_FW_filename, BOOT_INTERNAL_FLASH, SUIT_MD_FW_ADDRESS) == BOOT_UPDATE_OK)
-
-			}
-			break;
-
-		case Data_MSG:
-			if (Unpack_DataMsg(fnc_code, fdcan_rx_test_buf) == 0) {
-			} else{
-				//Send NACK to CM
-
-			}
-			break;
-
-		case EOT:
-			//No7
-			//receive EOT, do CRC on whole file
-			if(Unpack_EOT(fnc_code, fdcan_rx_test_buf)==0){
-			} else{
-				//Send NACK to CM
-			}
-			break;
-
-//		case TRIGGER:
-//			if(Unpack_Trigger(fnc_code,fdcan_rx_test_buf)<0){
-//
-//			}
-//			else{
-//
-//			}
-//			break;
-
-
-		default: break;
-	}
-
-	return 0;
-}
-
-//No3
 static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
     int ret=0;
     int t_cursor = 0;
@@ -547,19 +509,18 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	//nothing for 47 byte
 	uint16_t t_infomsgcrc;// (current)
 	uint16_t t_infomsgcrc_compare=0;// (current)
-
 	uint8_t INFO_outputBuff[64]={0,};
 
 	ProcessReceivedData(t_buff, INFO_outputBuff, 64);
 
 	memcpy(&t_file_size, &INFO_outputBuff[t_cursor],sizeof(t_file_size));
 	t_cursor += sizeof(t_file_size);
-	INFO_filesize =t_file_size;//4248289;//
+	INFO_filesize =t_file_size;
 	MD_FWInfoObj.fw_size=t_file_size;
 
 	memcpy(&t_start_addr_offset, &INFO_outputBuff[t_cursor],sizeof(t_start_addr_offset));
 	t_cursor += sizeof(t_start_addr_offset);
-	INFO_startaddroffset = t_start_addr_offset;//64;//
+	INFO_startaddroffset = t_start_addr_offset;
 	MD_FWInfoObj.fw_startAddr=t_start_addr_offset;
 
 	memcpy(&t_file_crc, &INFO_outputBuff[t_cursor],sizeof(t_file_crc));
@@ -569,34 +530,29 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 
 	memcpy(&t_total_data_index, &INFO_outputBuff[t_cursor],sizeof(t_total_data_index));
 	t_cursor += sizeof(t_total_data_index);
-	INFO_totaldataindex = t_total_data_index;//4381;//
+	INFO_totaldataindex = t_total_data_index;
 
 	memcpy(&t_fwversion, &INFO_outputBuff[t_cursor],sizeof(t_total_data_index));
 	t_cursor += sizeof(t_fwversion);
-	INFO_fwversion = t_fwversion;//4381;//
+	INFO_fwversion = t_fwversion;
 	MD_FWInfoObj.app_fw_ver = t_fwversion;
 
 	t_cursor += 47;
 	memcpy(&t_infomsgcrc, &INFO_outputBuff[t_cursor],sizeof(t_infomsgcrc));
-//    t_infomsgcrc= ((uint16_t)t_buff[t_cursor] << 8) | t_buff[t_cursor+1];
 	t_cursor += sizeof(t_infomsgcrc);
 	INFO_msgcrc = t_infomsgcrc;
 
 	//get CRC
 	t_infomsgcrc_compare = Calculate_CRC16(t_infomsgcrc_compare, t_buff, 0, 62);
-//	t_infomsgcrc_compare = Calculate_CRC16(t_infomsgcrc_compare, INFO_Rxbuf, 0, 62);//sizeof(t_buff));
 	INFO_msgcrc_compare= t_infomsgcrc_compare;
 
-	//Send ACK/NACK
+	//if CRC ok ACK, else NACK send
 	uint8_t retrial=0;
 	uint32_t wr_addr =0;
 
-	//No4
-	//if CRC ok ACK, else NACK send
 	if(INFO_msgcrc == INFO_msgcrc_compare){
 		//Erase flash sector of new fw
 		uint8_t sector_idx = 0; // the sector where i want to write the new firmware
-//		uint8_t erase_sector = (INFO_filesize + SUIT_APP_FW_INFO_SIZE) / (uint32_t) STM32H743_IFLASH_SECTOR_SIZE + 1;
 		uint8_t erase_sector = (MD_FWInfoObj.fw_size + SUIT_APP_FW_INFO_SIZE) / (uint32_t) STM32H743_IFLASH_SECTOR_SIZE + 1;
 		while(sector_idx < erase_sector)
 		{
@@ -619,13 +575,9 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		{
 			return BOOT_UPDATE_ERROR_FLASH_WRITE;
 		}
-//		f_index += SUIT_APP_FW_INFO_SIZE;
-
 
 		int cursor2=0;
 		//Send ACK
-		/* 2. Send Msg */
-		//first data frame is index 0 or 1???
 		uint16_t next_idx=1;//DATA_FRAME_IDX_1
 		memcpy(&INFO_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
 		cursor2+=sizeof(t_fnccode);
@@ -635,22 +587,20 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 
 		int idx=64-cursor2;
 
-		memset(&INFO_Txbuf[cursor2], 0, idx);//61
-		cursor2+=idx;//61;
+		memset(&INFO_Txbuf[cursor2], 0, idx);
+		cursor2+=idx;
 
 		uint16_t t_id = ACK | (MD_nodeID << 4)| (cm_node_id) ;
 
 		if(IOIF_TransmitFDCAN1(t_id, INFO_Txbuf, 64) != 0)
 			ret = 100;			// tx error
 
-		MD_Info_ACK_Flag++;// = 1;
+		MD_Info_ACK_Flag++;
 		return ret;
 	}
 	else{
 		//Send NACK
-		/* 2. Send Msg */
 		int cursor2=0;
-		//first data frame is index 0 or 1???
 		uint16_t curr_idx=0; //INFO_FRAME_IDX_0
 		memcpy(&INFO_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
 		cursor2+=sizeof(t_fnccode);
@@ -672,15 +622,11 @@ static int Unpack_InfoMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		if(IOIF_TransmitFDCAN1(t_id, INFO_Txbuf, 64) != 0)
 			ret = 100;			// tx error
 
-//		MD_Info_ACK_Flag = 0;
 		MD_Info_NACK_Flag++;
 		return ret;
 	}
 	return ret;
 }
-
-
-//No5
 
 static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	int ret=0;
@@ -694,7 +640,6 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	memcpy(&t_dataindexnumber, &t_buff[t_cursor],sizeof(t_dataindexnumber));
 	t_cursor += sizeof(t_dataindexnumber);
 	DATA_indexnumber=t_dataindexnumber;
-
 
     // Check if the received index is not the expected index
     if (t_dataindexnumber != expected_index) {
@@ -734,7 +679,6 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
     memcpy(&DATA_Rxbuf, &t_buff[t_cursor],sizeof(DATA_Rxbuf));
 	t_cursor += sizeof(DATA_Rxbuf);
 
-//	memcpy(&t_datamsgcrc, &t_buff[t_cursor],sizeof(t_datamsgcrc));
 	t_datamsgcrc= ((uint16_t)t_buff[t_cursor] << 8) | t_buff[t_cursor+1];
 	t_cursor += sizeof(t_datamsgcrc);
 	DATA_msgcrc=t_datamsgcrc;
@@ -742,17 +686,12 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	//get CRC
 	t_datamsgcrc_compare = Calculate_CRC16(t_datamsgcrc_compare, DATA_Rxbuf, 0, sizeof(DATA_Rxbuf));//sizeof(t_buff));
 	DATA_msgcrc_compare=t_datamsgcrc_compare;
-	//No6
 	//if CRC ok ACK, else NACK send
-	//Send ACK/NACK
 	uint8_t retrial=0;
 
 	if(DATA_msgcrc == DATA_msgcrc_compare){
 		t_datamsgcrc_compare=0;
-//		TOTAL_filecrc+=DATA_msgcrc;
 		//Write in flash sector for new fw
-		/* 2-2. File Read and Flash Write */
-
 		fw_bin_size = INFO_filesize;
 
 		while(f_index < fw_bin_size)
@@ -780,18 +719,10 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		           return BOOT_UPDATE_ERROR_FLASH_WRITE;
 		       }
 			f_index += wr_size;
-
-//			if(triggerWrite==1){
-//				MD_Update_Flag=0;
-//				DATA_WriteDone=1;
-//			}
 			break;
 		}
-
 		//Send ACK
 		int cursor2=0;
-		/* 2. Send Msg */
-		//first data frame is index 0 or 1???
 		uint16_t next_idx=DATA_indexnumber+1;//DATA_FRAME_IDX_1
 		memcpy(&DATA_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
 		cursor2+=sizeof(t_fnccode);
@@ -801,16 +732,15 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 
 		int idx=64-cursor2;
 
-		memset(&DATA_Txbuf[cursor2], 0, idx);//61
-		cursor2+=idx;//61;
+		memset(&DATA_Txbuf[cursor2], 0, idx);
+		cursor2+=idx;
 
 		uint16_t t_id = ACK | (MD_nodeID << 4) | (cm_node_id);
 
 		if(IOIF_TransmitFDCAN1(t_id, DATA_Txbuf, 64) != 0)
 			ret = 100;			// tx error
 
-
-		MD_Data_ACK_Flag++;// = 1;
+		MD_Data_ACK_Flag++;
 
 		if(f_index==fw_bin_size){
 			f_index = 0;
@@ -818,14 +748,9 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		}
 	}
 	else{
-//		DATA_msgcrc_compare=0;
 		t_datamsgcrc_compare=0;
 		//Send NACK
-		/* 2. Send Msg */
 		int cursor2=0;
-		//Send ACK
-		/* 2. Send Msg */
-		//first data frame is index 0 or 1???
 		uint16_t curr_idx=DATA_indexnumber; //INFO_FRAME_IDX_0
 		memcpy(&DATA_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
 		cursor2+=sizeof(t_fnccode);
@@ -853,16 +778,13 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 	return ret;
 }
 
-
 static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 	int ret=0;
 	MD_boot_state=BOOT_EOT;
-	//No8
 	//if CRC ok ACK, else NACK send
 	uint8_t retrial=0;
 
 	if(Boot_UpdateVerify((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
-//		HAL_Delay(1);
 		if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
 			if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
 				int cursor2=0;
@@ -898,7 +820,6 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 	else{
 		//Send NACK
 		int cursor2=0;
-		//first data frame is index 0 or 1???
 		uint16_t curr_idx=0; //INFO_FRAME_IDX_0
 		memcpy(&EOT_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
 		cursor2+=sizeof(t_fnccode);
@@ -912,118 +833,16 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 		retrial++;
 
 		int idx=64-cursor2;
-		memset(&EOT_Txbuf[cursor2], 0, idx);//60
-		cursor2+=idx;//60
+		memset(&EOT_Txbuf[cursor2], 0, idx);
+		cursor2+=idx;
 
 		uint16_t t_id = NACK | (MD_nodeID << 4) | (cm_node_id) ;
 
 		if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
 			ret = 100;			// tx error
 
-		MD_EOT_NACK_Flag++;// = 0;
+		MD_EOT_NACK_Flag++;
 
 	}
-	TOTAL_filecrc=0;
-
-
 	return ret;
-}
-
-static int Unpack_Trigger(uint32_t t_fnccode, uint8_t* t_buf){
-	int ret = 0;
-	uint32_t wr_addr = 0;
-    uint8_t triggerWrite = 1;//(f_index + wr_size >= fw_bin_size); // Trigger if last chunk
-	wr_addr = IOIF_FLASH_SECTOR_5_BANK1_ADDR+  f_index;//IOIF_FLASH_SECTOR_5_BANK1_ADDR + SUIT_APP_FW_INFO_SIZE + f_index + SUIT_APP_FW_BLANK_SIZE;
-
-    if (IOIF_WriteFlashMassBuffered(wr_addr, &DATA_Rxbuf[f_index % sizeof(DATA_Rxbuf)], 0, triggerWrite) != IOIF_FLASH_STATUS_OK)
-       {
-           return BOOT_UPDATE_ERROR_FLASH_WRITE;
-       }
-    return ret;
-}
-
-
-
-int Send_STX(){
-	int ret=0;
-	MD_boot_state=BOOT_STX;
-
-	//No0
-	//send Start transmission
-	uint16_t t_id = STX | (MD_nodeID << 4) | (cm_node_id) ;
-	uint8_t array[8]={0,};
-	if(IOIF_TransmitFDCAN1(t_id, array , 8) != 0){
-		ret = 100;			// tx error
-	}
-//	MD_STX_ACK_Flag = 1;
-	MD_STX_ACK_Flag ++;//= 1;
-
-	return ret;
-}
-
-
-int Send_NACK(uint16_t reqframe_idx, uint8_t retrial){
-	int ret = 0;
-	//Send NACK
-	int cursor2=0;
-	int t_fnccode = NACK;
-	//first data frame is index 0 or 1???
-	memcpy(&STX_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
-	cursor2+=sizeof(t_fnccode);
-
-	memcpy(&STX_Txbuf[cursor2], &reqframe_idx, sizeof(reqframe_idx));
-	cursor2+=sizeof(reqframe_idx);
-
-	memcpy(&STX_Txbuf[cursor2], &retrial, sizeof(retrial));
-	cursor2+=sizeof(retrial);
-
-	retrial++;
-
-	int idx=64-cursor2;
-	memset(&STX_Txbuf[cursor2], 0, idx);//60
-	cursor2+=idx;//60
-
-	uint16_t t_id = NACK | (MD_nodeID << 4)|(cm_node_id) ;
-
-	if(IOIF_TransmitFDCAN1(t_id, STX_Txbuf, 64) != 0)
-		ret = 100;			// tx error
-
-	return ret;
-
-}
-
-
-void Test_EOT(){
-	int ret=0;
-	MD_boot_state=BOOT_EOT;
-
-	//No8
-	//if CRC ok ACK, else NACK send
-	uint8_t retrial=0;
-	int cursor2=0;
-	//Send ACK
-	//first data frame is index 0 or 1???
-	uint16_t next_idx=1;//DATA_FRAME_IDX_1
-	uint32_t t_fnccode=EOT;
-	memcpy(&EOT_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
-	cursor2+=sizeof(t_fnccode);
-
-	memcpy(&EOT_Txbuf[cursor2], &next_idx, sizeof(next_idx));
-	cursor2+=sizeof(next_idx);
-
-	int idx=64-cursor2;
-
-	memset(&EOT_Txbuf[cursor2],0, idx);//61
-	cursor2+=idx;//61;
-
-	uint16_t t_id = ACK | (MD_nodeID << 4) | (cm_node_id) ;
-
-	if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
-		ret = 100;			// tx error
-
-
-//	MD_Update_Flag = 0;
-	MD_EOT_ACK_Flag ++;//= 1;
-
-		//		DATA_WriteDone=1;
 }

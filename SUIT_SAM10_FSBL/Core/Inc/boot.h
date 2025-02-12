@@ -142,21 +142,15 @@ extern uint8_t MD_EOT_ACK_Flag;
  * @brief Function prototypes declaration for this module.
  */
 
-
+void Boot_SetMDUpdateFlag(uint32_t flag);
 bool			Boot_HWInit(void);
 BootUpdateState Boot_CheckUpdateMode(void);																						// Check Update Mode
 BootUpdateError	Boot_JumpToApp(uint32_t flashAddr);																							// Jump to Application
-BootUpdateError Boot_UpdateFWfromFile(FATFS* fs, FIL* fileobject, uint8_t* filename, BootFlashDevice dev, uint32_t flashAddr);	// Copy file from USB to QSPI
-bool 			Boot_CM_CopyBinQSPItoFlash(void);
 bool 			Boot_AllDev_DeInit(void);// QSPI to Internal Flash
 BootUpdateError Boot_UpdateVerify(uint32_t flashAddr);
 BootUpdateError Boot_EraseCurrentMDFW(uint32_t flashAddr);
 BootUpdateError Boot_SaveNewMDFW(uint32_t flashAddr);
-
-//uint8_t 		Boot_FileTransmitFDCAN(void);
-BootUpdateError Boot_UpdateFWfromFDCAN(uint8_t* t_destbuff, uint8_t* t_originbuff, BootFlashDevice dev, uint32_t flashAddr);
-int Send_STX(void);
-void Test_EOT();
-void Boot_SetMDUpdateFlag(uint32_t flag);
+int Send_STX();
+int Send_NACK(uint16_t reqframe_idx, uint8_t retrial);
 
 #endif /* INC_BOOT_H_ */

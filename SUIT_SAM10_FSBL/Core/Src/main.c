@@ -42,8 +42,6 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-extern ApplicationTypeDef Appli_state;
-
 /* Define the same flash address where the variable is stored */
 #define MDUPDATEFLAG_SWITCH  ((uint32_t*)0x38000000)
 
@@ -58,36 +56,10 @@ extern ApplicationTypeDef Appli_state;
 
 /* USER CODE BEGIN PV */
 
-//const char* CM_FW_filename = "BL_test.bin";
-//const char* CM_FW_filename = "Control_Module_test.bin";
-const char* MD_FW_filename = "Motor_Driver_AS_test.bin";
-
-
-bool				Is_usb_ready = false;
-uint8_t				test_ioif_flag = 0;
-
-//FATFS				loaderfs_CM, loaderfs_MD;
-FATFS				loaderfs;
-FIL					loaderfile_CM, loaderfile_MD;
-FRESULT 			boot_mount_res = FR_NOT_READY;
-FRESULT				IsCMUpdate = FR_NOT_READY;
-FRESULT				IsMDUpdate = FR_NOT_READY;
-FILINFO				finfo_CM, finfo_MD;
 
 BootUpdateState		boot_state = BOOT_MD_UPDATE;
-uint32_t			boot_upgrade_timeout = 0;
 bool				boot_is_Upgrade = false;
-bool				boot_is_QSPItoFlash = false;
 bool				boot_is_jump = false;
-bool				CMUpdatedFlag = false;
-bool				MDUpdatedFlag = true;//false;
-bool				CMUpdateComplete = false;
-bool				MDUpdateComplete = false;
-bool 				MDUpdate_init = false;
-/* test */
-uint8_t fdcantestflag = 0;
-
-uint8_t test_EOT=0;
 
 uint32_t time_difference = 0;
 uint32_t MDUpdateFlag=0;
@@ -157,7 +129,6 @@ int main(void)
 	/* HW Init. */
 	if(Boot_HWInit() != true)
 		boot_state = BOOT_ERROR;
-
 
 	/* USER CODE END 2 */
 
@@ -279,8 +250,6 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-
-
 uint32_t ReadMDUpdateFlag()
 {
     return *MDUPDATEFLAG_SWITCH;
