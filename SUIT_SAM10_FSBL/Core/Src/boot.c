@@ -890,8 +890,8 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 
 				}
 
-				MD_Update_Flag = 0;
-				DATA_WriteDone=1;
+//				MD_Update_Flag = 0;
+//				DATA_WriteDone=1;
 			}
 		}
 	}
