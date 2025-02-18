@@ -816,38 +816,43 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 		MD_Update_Flag = 0;
 		DATA_WriteDone=1;
 	}
-		else{
-		//Send NACK
-		int cursor2=0;
-		uint16_t curr_idx=0; //INFO_FRAME_IDX_0
-		memcpy(&EOT_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
-		cursor2+=sizeof(t_fnccode);
+	else{
+		if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
+			if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
+				{
+					//Send NACK
+					int cursor2=0;
+					uint16_t curr_idx=0; //INFO_FRAME_IDX_0
+					memcpy(&EOT_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
+					cursor2+=sizeof(t_fnccode);
 
-		memcpy(&EOT_Txbuf[cursor2], &curr_idx, sizeof(curr_idx));
-		cursor2+=sizeof(curr_idx);
+					memcpy(&EOT_Txbuf[cursor2], &curr_idx, sizeof(curr_idx));
+					cursor2+=sizeof(curr_idx);
 
-		memcpy(&EOT_Txbuf[cursor2], &retrial, sizeof(retrial));
-		cursor2+=sizeof(retrial);
+					memcpy(&EOT_Txbuf[cursor2], &retrial, sizeof(retrial));
+					cursor2+=sizeof(retrial);
 
-		retrial++;
+					retrial++;
 
-		int idx=64-cursor2;
-		memset(&EOT_Txbuf[cursor2], 0, idx);
-		cursor2+=idx;
+					int idx=64-cursor2;
+					memset(&EOT_Txbuf[cursor2], 0, idx);
+					cursor2+=idx;
 
-		uint16_t t_id = NACK | (MD_nodeID << 4) | (cm_node_id) ;
+					uint16_t t_id = NACK | (MD_nodeID << 4) | (cm_node_id) ;
 
-		if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
-			ret = 100;			// tx error
+					if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
+						ret = 100;			// tx error
 
-		MD_EOT_NACK_Flag++;
-
+					MD_EOT_NACK_Flag++;
+				}
+			}
+		}
 	}
 	return ret;
 }
 
-/*else{
+	/*else{
 		if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
 			if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
 	}
- */
+	 */
