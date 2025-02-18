@@ -274,10 +274,11 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
 BootUpdateError Boot_EraseCurrentMDFW(uint32_t flashAddr)
 {
 	BootUpdateError ret = BOOT_UPDATE_OK;
+	fw_info_t *pInfo = (fw_info_t*)(flashAddr);
 
 	//Erase flash sector of new fw
 	uint8_t sector_idx = 0; // the sector where i want to write the new firmware
-	uint8_t erase_sector = (MD_FWInfoObj.fw_size + SUIT_APP_FW_INFO_SIZE) / (uint32_t) STM32H743_IFLASH_SECTOR_SIZE + 1;
+	uint8_t erase_sector = (pInfo->fw_size + SUIT_APP_FW_INFO_SIZE) / (uint32_t) STM32H743_IFLASH_SECTOR_SIZE + 1;
 
 	while(sector_idx < erase_sector)
 	{
@@ -295,18 +296,20 @@ BootUpdateError Boot_EraseCurrentMDFW(uint32_t flashAddr)
 }
 
 
-BootUpdateError Boot_SaveNewMDFW(uint32_t flashAddr)
+BootUpdateError Boot_SaveNewMDFW(uint32_t origin_flashAddr, uint32_t destination_flashAddr)
 {
 	BootUpdateError ret = BOOT_UPDATE_OK;
-    uint32_t srcAddr = IOIF_FLASH_SECTOR_5_BANK1_ADDR; // Flash Bank 1 Sector 5 시작 주소
-    fw_bin_size = MD_FWInfoObj.fw_size+SUIT_APP_FW_INFO_SIZE;
+	fw_info_t *pInfo = (fw_info_t*)(origin_flashAddr);
+
+    uint32_t srcAddr = origin_flashAddr;//IOIF_FLASH_SECTOR_5_BANK1_ADDR; // Flash Bank 1 Sector 5 시작 주소
+    fw_bin_size = pInfo->fw_size+SUIT_APP_FW_INFO_SIZE;
     uint8_t buffer[1024]; // 읽기/쓰기 버퍼
     uint32_t f_index = 0;
 
     while (f_index < fw_bin_size)
     {
         uint32_t wr_size = (fw_bin_size - f_index > 60) ? 60 : (fw_bin_size - f_index);
-        uint32_t wr_addr = flashAddr + f_index;//SUIT_APP_FW_INFO_SIZE + f_index;
+        uint32_t wr_addr = destination_flashAddr + f_index;//SUIT_APP_FW_INFO_SIZE + f_index;
 
         // Flash에서 데이터를 읽어오기
         if (IOIF_ReadFlash(srcAddr + f_index, buffer, wr_size) != IOIF_FLASH_STATUS_OK)
@@ -405,22 +408,22 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 	memcpy(fdcan_rx_test_buf, rx_pData, 64);
 
 	switch (fnc_code){
-		case FW_UPDATE:
-			Send_STX();
-			MD_Update_Flag=1;
+//		case FW_UPDATE:
+//			Send_STX();
+//			MD_Update_Flag=1;
+//
+//			break;
 
-			break;
-
-		case NACK:
-			if(stx_cnt<3){
-				Send_STX();
-				stx_cnt++;
-			}
-			else{
-				Send_NACK(0, stx_cnt);//STX
-				stx_cnt=0;
-			}
-			break;
+//		case NACK:
+//			if(stx_cnt<3){
+//				Send_STX();
+//				stx_cnt++;
+//			}
+//			else{
+//				Send_NACK(0, stx_cnt);//STX
+//				stx_cnt=0;
+//			}
+//			break;
 
 		case Info_MSG:
 			if (Unpack_InfoMsg(fnc_code, fdcan_rx_test_buf) == 0) {
@@ -786,7 +789,7 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 
 	if(Boot_UpdateVerify((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
 		if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
-			if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
+			if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
 				int cursor2=0;
 				//Send ACK
 				uint16_t next_idx=1;//DATA_FRAME_IDX_1

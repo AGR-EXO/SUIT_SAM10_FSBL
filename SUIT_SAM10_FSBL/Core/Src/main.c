@@ -130,6 +130,8 @@ int main(void)
 	if(Boot_HWInit() != true)
 		boot_state = BOOT_ERROR;
 
+	uint8_t cnt=0;
+
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
@@ -145,10 +147,19 @@ int main(void)
 
 		if(MDUpdateFlag == 1){
 			boot_state = BOOT_MD_UPDATE;
-			Send_STX();
-			Boot_SetMDUpdateFlag(1);
-			MDUpdateFlag=0;
-			memset(MDUPDATEFLAG_SWITCH,0,4);
+			//App1 copy from sector 1 to sector 5
+			if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
+				if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
+					Send_STX();
+					Boot_SetMDUpdateFlag(1);
+					MDUpdateFlag=0;
+					memset(MDUPDATEFLAG_SWITCH,0,4);
+				}
+			}
+			else{
+				Send_NACK(0, cnt);
+				cnt++;
+			}
 		}
 		/* Check timeout condition */
 //		time_difference = HAL_GetTick() - main_start_time;

@@ -149,7 +149,7 @@ BootUpdateError	Boot_JumpToApp(uint32_t flashAddr);																							// Jum
 bool 			Boot_AllDev_DeInit(void);// QSPI to Internal Flash
 BootUpdateError Boot_UpdateVerify(uint32_t flashAddr);
 BootUpdateError Boot_EraseCurrentMDFW(uint32_t flashAddr);
-BootUpdateError Boot_SaveNewMDFW(uint32_t flashAddr);
+BootUpdateError Boot_SaveNewMDFW(uint32_t origin_flashAddr, uint32_t destination_flashAddr);
 int Send_STX();
 int Send_NACK(uint16_t reqframe_idx, uint8_t retrial);
 
