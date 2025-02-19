@@ -19,7 +19,7 @@
 
 #define FLASH_BUFFER_SIZE 1024
 #define FLASH_WORD_SIZE 32
-
+#define MD_UPDATE_FLAG ((uint32_t*)0x38000000)
 
 
 /**
@@ -788,26 +788,28 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 	uint8_t retrial=0;
 
 	if(Boot_UpdateVerify((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
-		int cursor2=0;
-		//Send ACK
-		uint16_t next_idx=1;//DATA_FRAME_IDX_1
-		memcpy(&EOT_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
-		cursor2+=sizeof(t_fnccode);
+//		int cursor2=0;
+//		//Send ACK
+//		uint16_t next_idx=1;//DATA_FRAME_IDX_1
+//		memcpy(&EOT_Txbuf[cursor2], &t_fnccode, sizeof(t_fnccode));
+//		cursor2+=sizeof(t_fnccode);
+//
+//		memcpy(&EOT_Txbuf[cursor2], &next_idx, sizeof(next_idx));
+//		cursor2+=sizeof(next_idx);
+//
+//		int idx=64-cursor2;
+//
+//		memset(&EOT_Txbuf[cursor2],0, idx);//61
+//		cursor2+=idx;//61;
+//
+//		uint16_t t_id = ACK | (MD_nodeID << 4) | (cm_node_id) ;
+//
+//		if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
+//			ret = 100;			// tx error
+//
+//		MD_EOT_ACK_Flag ++;//= 1;
 
-		memcpy(&EOT_Txbuf[cursor2], &next_idx, sizeof(next_idx));
-		cursor2+=sizeof(next_idx);
-
-		int idx=64-cursor2;
-
-		memset(&EOT_Txbuf[cursor2],0, idx);//61
-		cursor2+=idx;//61;
-
-		uint16_t t_id = ACK | (MD_nodeID << 4) | (cm_node_id) ;
-
-		if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0)
-			ret = 100;			// tx error
-
-		MD_EOT_ACK_Flag ++;//= 1;
+		*MD_UPDATE_FLAG = 2;
 
 		for(int i=0; i<70000; i++){
 
