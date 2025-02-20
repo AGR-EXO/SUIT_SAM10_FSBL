@@ -44,6 +44,7 @@
 
 /* Define the same flash address where the variable is stored */
 #define MDUPDATEFLAG_SWITCH  ((uint32_t*)0x38000000)
+#define MDFWBINSIZE  ((uint32_t*)0x38000004)
 
 /* USER CODE END PD */
 
@@ -71,6 +72,7 @@ void MX_USB_HOST_Process(void);
 
 /* USER CODE BEGIN PFP */
 uint32_t ReadMDUpdateFlag();
+uint32_t ReadMDFWBinSize();
 void BL_LED_Blinking();
 
 
@@ -119,6 +121,7 @@ int main(void)
 	MX_FDCAN1_Init();
 	/* USER CODE BEGIN 2 */
 	MDUpdateFlag = ReadMDUpdateFlag();
+	MDFWBinSize = ReadMDFWBinSize();
 
 	__enable_irq();
 	main_start_time = HAL_GetTick();
@@ -129,6 +132,8 @@ int main(void)
 	/* HW Init. */
 	if(Boot_HWInit() != true)
 		boot_state = BOOT_ERROR;
+
+	uint8_t cnt=0;
 
 	/* USER CODE END 2 */
 
@@ -145,10 +150,19 @@ int main(void)
 
 		if(MDUpdateFlag == 1){
 			boot_state = BOOT_MD_UPDATE;
-			Send_STX();
-			Boot_SetMDUpdateFlag(1);
-			MDUpdateFlag=0;
-			memset(MDUPDATEFLAG_SWITCH,0,4);
+			//App1 copy from sector 1 to sector 5
+			if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
+				if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
+					Send_STX();
+					Boot_SetMDUpdateFlag(1);
+					MDUpdateFlag=0;
+					memset(MDUPDATEFLAG_SWITCH,0,4);
+				}
+			}
+			else{
+				Send_NACK(0, cnt);
+				cnt++;
+			}
 		}
 		/* Check timeout condition */
 //		time_difference = HAL_GetTick() - main_start_time;
@@ -253,6 +267,11 @@ void SystemClock_Config(void)
 uint32_t ReadMDUpdateFlag()
 {
     return *MDUPDATEFLAG_SWITCH;
+}
+
+uint32_t ReadMDFWBinSize()
+{
+    return *MDFWBINSIZE;
 }
 
 void BL_LED_Blinking() {
