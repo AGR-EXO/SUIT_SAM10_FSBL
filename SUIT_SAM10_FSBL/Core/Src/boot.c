@@ -41,7 +41,7 @@ fw_version_t BL_FW_VER;
 fw_info_t MD_FWInfoObj={0,};
 
 //MD Update Flag
-uint32_t MD_Update_Flag=0;
+//uint32_t MD_Update_Flag=0;
 
 //BOOT STATE
 BootUpdateSubState MD_boot_state=BOOT_NONE;
@@ -87,6 +87,7 @@ uint8_t EOT_Txbuf[64]={0,};
 
 uint32_t MDFWBinSize=0;
 
+uint8_t MD_Update_Flag = 0;
 /**
  *------------------------------------------------------------
  *                      STATIC VARIABLES
@@ -118,9 +119,9 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf);
  */
 
 
-void Boot_SetMDUpdateFlag(uint32_t flag){
-	MD_Update_Flag=flag;
-}
+//void Boot_SetMDUpdateFlag(uint32_t flag){
+//	MD_Update_Flag=flag;
+//}
 
 bool Boot_HWInit(void)
 {
@@ -349,6 +350,24 @@ int Send_STX(){
 	return ret;
 }
 
+
+int Send_EOT(uint8_t index){
+	int ret=0;
+	MD_boot_state=BOOT_EOT;
+
+	//send Start transmission
+	uint16_t t_id = EOT | (MD_nodeID << 4) | (cm_node_id) ;
+	uint8_t array[8]={0,};
+	array[0]=index;
+	if(IOIF_TransmitFDCAN1(t_id, array , 8) != 0){
+		ret = 100;			// tx error
+	}
+
+	MD_EOT_ACK_Flag ++;
+
+	return ret;
+}
+
 int Send_NACK(uint16_t reqframe_idx, uint8_t retrial){
 	int ret = 0;
 	//Send NACK
@@ -408,22 +427,54 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 	memcpy(fdcan_rx_test_buf, rx_pData, 64);
 
 	switch (fnc_code){
-//		case FW_UPDATE:
-//			Send_STX();
-//			MD_Update_Flag=1;
-//
-//			break;
+		case FW_UPDATE:
+			//App1 copy from sector 1 to sector 5
+			if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
+				if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
+					uint32_t MD_Update, MD_Backup=1;
+					uint32_t writeAddr = IOIF_FLASH_SECTOR_3_BANK2_ADDR;
+					//erase
+					IOIF_EraseFlash(writeAddr, IOIF_ERASE_ONE_SECTOR);
+					//write
+					IOIF_WriteFlash(writeAddr, &MD_Update);
+					writeAddr+=32;
+					IOIF_WriteFlash(writeAddr, &MD_Backup);
+					writeAddr+=32;
 
-//		case NACK:
-//			if(stx_cnt<3){
-//				Send_STX();
-//				stx_cnt++;
-//			}
-//			else{
-//				Send_NACK(0, stx_cnt);//STX
-//				stx_cnt=0;
-//			}
-//			break;
+					Send_STX();
+					//					MD_Update_Flag=1;
+				}
+			}
+
+			break;
+
+		case NACK:
+			if(stx_cnt<3){
+				//App1 copy from sector 1 to sector 5
+				if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
+					if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
+						uint32_t MD_Update, MD_Backup=1;
+						uint32_t writeAddr = IOIF_FLASH_SECTOR_3_BANK2_ADDR;
+						//erase
+						IOIF_EraseFlash(writeAddr, IOIF_ERASE_ONE_SECTOR);
+						//write
+						IOIF_WriteFlash(writeAddr, &MD_Update);
+						writeAddr+=32;
+						IOIF_WriteFlash(writeAddr, &MD_Backup);
+						writeAddr+=32;
+
+						Send_STX();
+
+						stx_cnt++;
+					}
+				}
+
+			}
+			else{
+				Send_NACK(0, stx_cnt);//STX
+				stx_cnt=0;
+			}
+			break;
 
 		case Info_MSG:
 			if (Unpack_InfoMsg(fnc_code, fdcan_rx_test_buf) == 0) {
@@ -746,7 +797,10 @@ static int Unpack_DataMsg(uint32_t t_fnccode, uint8_t* t_buff){
 		MD_Data_ACK_Flag++;
 
 		if(f_index==fw_bin_size){
+			//end of write
 			f_index = 0;
+			MD_boot_state=BOOT_EOT;
+
 
 		}
 	}

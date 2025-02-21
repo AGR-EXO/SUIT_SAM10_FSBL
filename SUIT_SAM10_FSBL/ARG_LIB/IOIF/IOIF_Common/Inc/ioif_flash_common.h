@@ -23,6 +23,8 @@
  * @brief Directives and macros for readability and efficiency.
  */
 
+#define UNWRITTEN_VALUE 0xFFFFFFFF // 쓰기 전 메모리의 기본값
+
 #define CONTENTS_ARRAY_SIZE     32
 
 #define IOIF_NUM_SECTORS        1

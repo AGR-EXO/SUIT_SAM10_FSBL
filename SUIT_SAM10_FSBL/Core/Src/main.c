@@ -64,6 +64,12 @@ bool				boot_is_jump = false;
 
 uint32_t time_difference = 0;
 uint32_t MDUpdateFlag=0;
+
+uint32_t FW_Update_Flag = 0;
+uint32_t FW_Backup_Flag = 0;
+uint32_t FW_Copy_Flag = 0;
+uint32_t MD_Update = 0;
+uint32_t MD_Backup = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -120,7 +126,7 @@ int main(void)
 	MX_DMA_Init();
 	MX_FDCAN1_Init();
 	/* USER CODE BEGIN 2 */
-	MDUpdateFlag = ReadMDUpdateFlag();
+//	MDUpdateFlag = ReadMDUpdateFlag();
 	MDFWBinSize = ReadMDFWBinSize();
 
 	__enable_irq();
@@ -135,6 +141,37 @@ int main(void)
 
 	uint8_t cnt=0;
 
+    uint32_t readAddr = IOIF_FLASH_SECTOR_3_BANK2_ADDR;
+
+    IOIF_ReadFlash(readAddr, &FW_Update_Flag,       	IOIF_FLASH_READ_SIZE_4B);
+    readAddr += IOIF_FLASH_READ_SIZE_32B;
+    IOIF_ReadFlash(readAddr, &FW_Backup_Flag,           IOIF_FLASH_READ_SIZE_4B);
+//    readAddr += IOIF_FLASH_READ_SIZE_32B;
+//    IOIF_ReadFlash(readAddr, &FW_Copy_Flag, 	        IOIF_FLASH_READ_SIZE_32B); readAddr += IOIF_FLASH_READ_SIZE_32B;
+
+    if((FW_Update_Flag == 0)&&(FW_Backup_Flag == 0)){
+    	//jump to App1
+		Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR);
+    }
+    else if((FW_Update_Flag == 1)&&(FW_Backup_Flag == 1)){
+    	//copy App1 to sector 1
+    	if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
+    		if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
+    			Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR);
+    		}
+    	}
+   	}
+    else if((FW_Update_Flag == 1)&&(FW_Backup_Flag == 0)){
+        	//stay in BL
+    }
+
+    if(FW_Update_Flag == 1){
+    	MD_Update_Flag=1;
+    	boot_state = BOOT_MD_UPDATE;
+    }
+
+
+
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
@@ -142,21 +179,45 @@ int main(void)
 	while (1)
 	{
 
+
 		BL_LED_Blinking();
 		/* 1. Check Boot Mode */
-		if(boot_state != BOOT_ERROR)
+		if(boot_state != BOOT_ERROR){
 			boot_state = Boot_CheckUpdateMode();
+		}
 
 
-		if(MDUpdateFlag == 1){
-			boot_state = BOOT_MD_UPDATE;
+		if(boot_state == BOOT_MD_UPDATE){
+			boot_is_Upgrade = true;
+
 			//App1 copy from sector 1 to sector 5
 			if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
 				if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
+		    		uint32_t writeAddr = IOIF_FLASH_SECTOR_3_BANK2_ADDR;
+		    		//erase
+		    		IOIF_EraseFlash(writeAddr, IOIF_ERASE_ONE_SECTOR);
+		    		for(int i=0; i<7000;i++){}
+
+		    		//write
+					MD_Update = 0x0000000000000000000000000000000000000000000000000000000000000001;
+		    		IOIF_WriteFlash(writeAddr, &MD_Update);
+		    		for(int i=0; i<7000;i++){}
+
+		    		writeAddr+=32;
+					MD_Backup = 0x0000000000000000000000000000000000000000000000000000000000000001;
+		    		IOIF_WriteFlash(writeAddr, &MD_Backup);
+		    		for(int i=0; i<7000;i++){}
+
+//
+//		    		uint32_t readAddr = IOIF_FLASH_SECTOR_3_BANK2_ADDR;
+//
+//
+//		    		IOIF_ReadFlash(readAddr, &MD_Update,       	IOIF_FLASH_READ_SIZE_32B); readAddr += IOIF_FLASH_READ_ADDR_SIZE_32B;
+//		    		IOIF_ReadFlash(readAddr, &MD_Backup,         IOIF_FLASH_READ_SIZE_32B); //readAddr += IOIF_FLASH_READ_ADDR_SIZE_32B;
+
 					Send_STX();
-					Boot_SetMDUpdateFlag(1);
-					MDUpdateFlag=0;
-					memset(MDUPDATEFLAG_SWITCH,0,4);
+
+					MD_Update_Flag = 0;
 				}
 			}
 			else{
@@ -167,16 +228,10 @@ int main(void)
 		/* Check timeout condition */
 //		time_difference = HAL_GetTick() - main_start_time;
 //		if (time_difference > 4000 && boot_state != BOOT_MD_UPDATE)
-		if (boot_state != BOOT_MD_UPDATE)
-		{
-			Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR);
-		}
-
-		if(boot_state == BOOT_MD_UPDATE)
-		{
-			boot_is_Upgrade = true;
-		}
-
+//		if (boot_state != BOOT_MD_UPDATE)
+//		{
+//			Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR);
+//		}
 
 		/* 5. Normal Boot */
 		else if(boot_state == BOOT_NORMAL)
@@ -193,6 +248,27 @@ int main(void)
 			while(1)
 			{
 				HAL_Delay(2000);
+			}
+		}
+
+		if(MD_boot_state==BOOT_EOT){
+			//if CRC ok ACK, else NACK send
+			uint8_t retrial=0;
+
+			if(Boot_UpdateVerify((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
+				if(Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR) != BOOT_UPDATE_OK)
+					boot_state = BOOT_ERROR;
+				}
+			else{
+				if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
+					if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
+						{
+						if(Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR) != BOOT_UPDATE_OK)
+							boot_state = BOOT_ERROR;
+
+						}
+					}
+				}
 			}
 		}
 		/* USER CODE END WHILE */

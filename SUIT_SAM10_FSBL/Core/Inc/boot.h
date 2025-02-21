@@ -120,6 +120,13 @@ typedef struct _fw_info_t
 	fw_version_t app_fw_ver;
 } fw_info_t;
 
+typedef enum _BootFlag
+{
+	FW_UPDATE_FLAG = 1,
+	FW_BACKUP_FLAG,
+	FW_COPY_FLAG,
+} BootFlag;
+
 /**
  *------------------------------------------------------------
  *                      GLOBAL VARIABLES
@@ -135,6 +142,8 @@ extern uint16_t MD_Data_ACK_Flag;
 extern uint16_t MD_Data_NACK_Flag;
 extern uint8_t MD_EOT_ACK_Flag;
 extern uint32_t MDFWBinSize;
+extern BootUpdateSubState MD_boot_state;
+extern uint8_t MD_Update_Flag;
 
 /**
  *------------------------------------------------------------
@@ -143,7 +152,7 @@ extern uint32_t MDFWBinSize;
  * @brief Function prototypes declaration for this module.
  */
 
-void Boot_SetMDUpdateFlag(uint32_t flag);
+//void Boot_SetMDUpdateFlag(uint32_t flag);
 bool			Boot_HWInit(void);
 BootUpdateState Boot_CheckUpdateMode(void);																						// Check Update Mode
 BootUpdateError	Boot_JumpToApp(uint32_t flashAddr);																							// Jump to Application
@@ -153,5 +162,6 @@ BootUpdateError Boot_EraseCurrentMDFW(uint32_t flashAddr);
 BootUpdateError Boot_SaveNewMDFW(uint32_t origin_flashAddr, uint32_t destination_flashAddr);
 int Send_STX();
 int Send_NACK(uint16_t reqframe_idx, uint8_t retrial);
+int Send_EOT(uint8_t index);
 
 #endif /* INC_BOOT_H_ */

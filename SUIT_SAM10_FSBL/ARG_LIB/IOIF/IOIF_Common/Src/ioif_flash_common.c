@@ -312,8 +312,19 @@ IOIF_FLASHState_t IOIF_ReadFlash(uint32_t flashAddr, void* pData, uint32_t lengt
         return IOIF_FLASH_BUFFER_OVERFLOW;
     }
 
-    // Read data from the flash memory into the buffer
-    memcpy(pData, (uint32_t*)flashAddr, length);
+    // Flash 메모리에서 pData 버퍼로 데이터를 복사합니다.
+    memcpy(pData, (void*)flashAddr, length);
+
+    // pData 버퍼를 uint32_t 단위로 검사합니다.
+    uint32_t* uint32pData = (uint32_t*)pData;
+    uint32_t numElements = length / sizeof(uint32_t); // 데이터의 개수를 계산합니다.
+
+    for(uint32_t i = 0; i < numElements; i++) {
+        if (uint32pData[i] == UNWRITTEN_VALUE) {
+            // 쓰기 전 메모리 값이 발견되면, 해당 위치를 0으로 초기화합니다.
+            uint32pData[i] = 0;
+        }
+    }
 
     return IOIF_FLASH_STATUS_OK;
 }
