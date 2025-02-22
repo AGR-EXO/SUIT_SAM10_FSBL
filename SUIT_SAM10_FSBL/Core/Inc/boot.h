@@ -141,9 +141,12 @@ extern uint16_t MD_Info_NACK_Flag;
 extern uint16_t MD_Data_ACK_Flag;
 extern uint16_t MD_Data_NACK_Flag;
 extern uint8_t MD_EOT_ACK_Flag;
+extern uint8_t MD_EOT_NACK_Flag;
 extern uint32_t MDFWBinSize;
 extern BootUpdateSubState MD_boot_state;
 extern uint8_t MD_Update_Flag;
+extern uint8_t cm_node_id;
+extern uint8_t MD_nodeID;
 
 /**
  *------------------------------------------------------------
