@@ -151,7 +151,7 @@ int main(void)
     readAddr += IOIF_FLASH_READ_SIZE_32B;
 //    IOIF_ReadFlash(readAddr, &FW_EOT_Flag,      	    IOIF_FLASH_READ_SIZE_4B);
 
-    if((FW_Update_Flag == 0xFFFFFFFF)&&(FW_Backup_Flag == 0xFFFFFFFF)){
+    if((FW_Update_Flag == 0xFFFFFFFF)&&(FW_Backup_Flag == 0xFFFFFFFF)){//0x0)&&(FW_Backup_Flag ==0x0)){
     	//jump to App1
 		Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR);
     }
@@ -324,9 +324,9 @@ int main(void)
 				////				IOIF_WriteFlash(writeAddr, &MD_EOT);
 				////				for(int i=0; i<7000;i++){}
 
-				if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
-					if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
-						{
+//				if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
+//					if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
+//
 							//Send NACK
 							int cursor2=0;
 							uint16_t curr_idx=0; //INFO_FRAME_IDX_0
@@ -353,14 +353,15 @@ int main(void)
 //								ret = 100;			// tx error
 
 								MD_EOT_NACK_Flag++;
-						}
-					}
+								MD_boot_state = 0;
+//						}
+//					}
 					//						if(Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR) != BOOT_UPDATE_OK)
 					//							boot_state = BOOT_ERROR;
 					//
 					//						}
 					//					}
-				}
+
 			}
 		}
 		/* USER CODE END WHILE */
