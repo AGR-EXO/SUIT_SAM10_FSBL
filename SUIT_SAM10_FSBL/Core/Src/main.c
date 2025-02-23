@@ -82,7 +82,8 @@ void MX_USB_HOST_Process(void);
 uint32_t ReadMDUpdateFlag();
 uint32_t ReadMDFWBinSize();
 void BL_LED_Blinking();
-
+void MD_ReadFlags();
+void MD_EraseWriteFW();
 
 /* USER CODE END PFP */
 
@@ -128,14 +129,9 @@ int main(void)
 	MX_DMA_Init();
 	MX_FDCAN1_Init();
 	/* USER CODE BEGIN 2 */
-//	MDUpdateFlag = ReadMDUpdateFlag();
-//	MDFWBinSize = ReadMDFWBinSize();
 
 	__enable_irq();
 	main_start_time = HAL_GetTick();
-
-
-//	__disable_irq();
 
 	/* HW Init. */
 	if(Boot_HWInit() != true)
@@ -143,13 +139,7 @@ int main(void)
 
 	uint8_t cnt=0;
 
-    uint32_t readAddr = IOIF_FLASH_SECTOR_3_BANK2_ADDR;
-
-    IOIF_ReadFlash(readAddr, &FW_Update_Flag,       	IOIF_FLASH_READ_SIZE_4B);
-    readAddr += IOIF_FLASH_READ_SIZE_32B;
-    IOIF_ReadFlash(readAddr, &FW_Backup_Flag,           IOIF_FLASH_READ_SIZE_4B);
-    readAddr += IOIF_FLASH_READ_SIZE_32B;
-    IOIF_ReadFlash(readAddr, &MDFWBinSize,      	    IOIF_FLASH_READ_SIZE_4B);
+	MD_ReadFlags();
 
     if((FW_Update_Flag == 0xFFFFFFFF)&&(FW_Backup_Flag == 0xFFFFFFFF)){//0x0)&&(FW_Backup_Flag ==0x0)){
     	//jump to App1
@@ -157,48 +147,14 @@ int main(void)
     }
     else if((FW_Update_Flag == 1)&&(FW_Backup_Flag == 1)){
     	//Send trigger to CM to stop FW Update or restart, MD entering recovery mode
-    	//Send_EOT(0);
     	Send_Recovery(0);
-
-    	//copy App1 to sector 1
-    	if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR, MDFWBinSize)==BOOT_UPDATE_OK){
-    		if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR,MDFWBinSize)==BOOT_UPDATE_OK){
-        		uint32_t MD_Update=1;
-        		uint32_t MD_Backup=1;
-//        		uint32_t MD_EOT=2;
-        		uint32_t writeAddr = IOIF_FLASH_SECTOR_3_BANK2_ADDR;
-        		//erase
-        		IOIF_EraseFlash(writeAddr, IOIF_ERASE_ONE_SECTOR);
-        		for(int i=0; i<7000;i++){}
-
-        		//write
-        		IOIF_WriteFlash(writeAddr, &MD_Update);
-        		writeAddr += 32;
-        		for(int i=0; i<7000;i++){}
-
-        		//write
-        		IOIF_WriteFlash(writeAddr, &MD_Backup);
-        		writeAddr += 32;
-        		for(int i=0; i<7000;i++){}
-
-        		//write
-        		IOIF_WriteFlash(writeAddr, &MDFWBinSize);
-        		for(int i=0; i<7000;i++){}
-
-    			Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR);
-    		}
-    	}
+    	MD_EraseWriteFW();
    	}
-    else if((FW_Update_Flag == 1)&&(FW_Backup_Flag == 0xFFFFFFFF)){
-        	//stay in BL
-    }
 
     if(FW_Update_Flag == 1){
     	MD_Update_Flag=1;
     	boot_state = BOOT_MD_UPDATE;
     }
-
-
 
 	/* USER CODE END 2 */
 
@@ -206,14 +162,11 @@ int main(void)
 	/* USER CODE BEGIN WHILE */
 	while (1)
 	{
-
-
 		BL_LED_Blinking();
 		/* 1. Check Boot Mode */
 		if(boot_state != BOOT_ERROR){
 			boot_state = Boot_CheckUpdateMode();
 		}
-
 
 		if(boot_state == BOOT_MD_UPDATE){
 			boot_is_Upgrade = true;
@@ -240,12 +193,6 @@ int main(void)
 		    		IOIF_WriteFlash(writeAddr, &MDFWBinSize);
 		    		for(int i=0; i<7000;i++){}
 
-//		    		uint32_t readAddr = IOIF_FLASH_SECTOR_3_BANK2_ADDR;
-//
-//
-//		    		IOIF_ReadFlash(readAddr, &MD_Update,       	IOIF_FLASH_READ_SIZE_32B); readAddr += IOIF_FLASH_READ_ADDR_SIZE_32B;
-//		    		IOIF_ReadFlash(readAddr, &MD_Backup,         IOIF_FLASH_READ_SIZE_32B); //readAddr += IOIF_FLASH_READ_ADDR_SIZE_32B;
-
 					Send_STX();
 
 					MD_Update_Flag = 0;
@@ -256,22 +203,13 @@ int main(void)
 				cnt++;
 			}
 		}
-		/* Check timeout condition */
-//		time_difference = HAL_GetTick() - main_start_time;
-//		if (time_difference > 4000 && boot_state != BOOT_MD_UPDATE)
-//		if (boot_state != BOOT_MD_UPDATE)
-//		{
-//			Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR);
-//		}
 
-		/* 5. Normal Boot */
 		else if(boot_state == BOOT_NORMAL)
 		{
 			boot_is_jump = true;
 			if(Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR) != BOOT_UPDATE_OK)
 				boot_state = BOOT_ERROR;
 		}
-
 
 		/* Error Handler */
 		else if(boot_state == BOOT_ERROR)					//BOOT_ERROR
@@ -286,90 +224,37 @@ int main(void)
 
 		if(MD_boot_state==BOOT_EOT){
 			if(Boot_UpdateVerify((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
-//				uint32_t writeAddr = IOIF_FLASH_SECTOR_3_BANK2_ADDR;
-//				uint32_t MD_Update = 0x1;//0000000000000000000000000000000000000000000000000000000000000001;
-//				uint32_t MD_Backup = 0x1;//0000000000000000000000000000000000000000000000000000000000000001;
-////				uint32_t MD_EOT = 0x1;//0000000000000000000000000000000000000000000000000000000000000001;
-//
-//				//erase
-//				IOIF_EraseFlash(writeAddr, IOIF_ERASE_ONE_SECTOR);
-//				for(int i=0; i<7000;i++){}
-//
-//				//write
-//				IOIF_WriteFlash(writeAddr, &MD_Update);
-//				for(int i=0; i<7000;i++){}
-//				writeAddr += 32;
-//
-//				IOIF_WriteFlash(writeAddr, &MD_Backup);
-//				for(int i=0; i<7000;i++){}
-////				writeAddr += 32;
-
-//				IOIF_WriteFlash(writeAddr, &MD_EOT);
-//				for(int i=0; i<7000;i++){}
-
 				if(Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR) != BOOT_UPDATE_OK)
 					boot_state = BOOT_ERROR;
 			}
 			else{
-				//				uint32_t writeAddr = IOIF_FLASH_SECTOR_3_BANK2_ADDR;
-				//				uint32_t MD_Update = 0x0000000000000000000000000000000000000000000000000000000000000001;
-				//				uint32_t MD_Backup = 0x0000000000000000000000000000000000000000000000000000000000000001;
-				//				uint32_t MD_EOT = 0;
-				//
-				//				//erase
-				//				IOIF_EraseFlash(writeAddr, IOIF_ERASE_ONE_SECTOR);
-				//				for(int i=0; i<7000;i++){}
-				//
-				//				//write
-				//				IOIF_WriteFlash(writeAddr, &MD_Update);
-				//				for(int i=0; i<7000;i++){}
-				//				writeAddr += 32;
-				//
-				//				IOIF_WriteFlash(writeAddr, &MD_Backup);
-				//				for(int i=0; i<7000;i++){}
-				////				writeAddr += 32;
-				////
-				////				IOIF_WriteFlash(writeAddr, &MD_EOT);
-				////				for(int i=0; i<7000;i++){}
+				//Send NACK
+				int cursor2=0;
+				uint16_t curr_idx=0; //INFO_FRAME_IDX_0
+				uint8_t EOT_Txbuf[64]={0,};
+				uint16_t t_fnccode = (uint16_t)0x500U;
+				memcpy(&EOT_Txbuf[cursor2], &t_fnccode , sizeof(t_fnccode));
+				cursor2+=sizeof(t_fnccode);
 
-//				if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
-//					if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
-//
-							//Send NACK
-							int cursor2=0;
-							uint16_t curr_idx=0; //INFO_FRAME_IDX_0
-							uint8_t EOT_Txbuf[64]={0,};
-							uint16_t t_fnccode = (uint16_t)0x500U;
-							memcpy(&EOT_Txbuf[cursor2], &t_fnccode , sizeof(t_fnccode));
-							cursor2+=sizeof(t_fnccode);
+				memcpy(&EOT_Txbuf[cursor2], &curr_idx, sizeof(curr_idx));
+				cursor2+=sizeof(curr_idx);
 
-							memcpy(&EOT_Txbuf[cursor2], &curr_idx, sizeof(curr_idx));
-							cursor2+=sizeof(curr_idx);
+				memcpy(&EOT_Txbuf[cursor2], &retrial, sizeof(retrial));
+				cursor2+=sizeof(retrial);
 
-							memcpy(&EOT_Txbuf[cursor2], &retrial, sizeof(retrial));
-							cursor2+=sizeof(retrial);
+				retrial++;
 
-							retrial++;
+				int idx=64-cursor2;
+				memset(&EOT_Txbuf[cursor2], 0, idx);
+				cursor2+=idx;
 
-							int idx=64-cursor2;
-							memset(&EOT_Txbuf[cursor2], 0, idx);
-							cursor2+=idx;
+				uint16_t t_id = NACK | (MD_nodeID << 4) | (cm_node_id) ;
 
-							uint16_t t_id = NACK | (MD_nodeID << 4) | (cm_node_id) ;
+				if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0){}
+				//								ret = 100;			// tx error
 
-							if(IOIF_TransmitFDCAN1(t_id, EOT_Txbuf, 64) != 0){}
-//								ret = 100;			// tx error
-
-								MD_EOT_NACK_Flag++;
-								MD_boot_state = 0;
-//						}
-//					}
-					//						if(Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR) != BOOT_UPDATE_OK)
-					//							boot_state = BOOT_ERROR;
-					//
-					//						}
-					//					}
-
+				MD_EOT_NACK_Flag++;
+				MD_boot_state = 0;
 			}
 		}
 		/* USER CODE END WHILE */
@@ -461,6 +346,49 @@ void BL_LED_Blinking() {
         IOIF_ToggleGPIOPin(IOIF_GPIO_PORT_D, IOIF_GPIO_PIN_13);  // Toggle LED
         previous_time = current_time;  // Update last toggle time
     }
+}
+
+
+void MD_ReadFlags(){
+    uint32_t readAddr = IOIF_FLASH_SECTOR_3_BANK2_ADDR;
+
+    IOIF_ReadFlash(readAddr, &FW_Update_Flag,       	IOIF_FLASH_READ_SIZE_4B);
+    readAddr += IOIF_FLASH_READ_SIZE_32B;
+    IOIF_ReadFlash(readAddr, &FW_Backup_Flag,           IOIF_FLASH_READ_SIZE_4B);
+    readAddr += IOIF_FLASH_READ_SIZE_32B;
+    IOIF_ReadFlash(readAddr, &MDFWBinSize,      	    IOIF_FLASH_READ_SIZE_4B);
+
+}
+
+void MD_EraseWriteFW(){
+	//copy App1 to sector 1
+	if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR, MDFWBinSize)==BOOT_UPDATE_OK){
+		if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR,MDFWBinSize)==BOOT_UPDATE_OK){
+    		uint32_t MD_Update=1;
+    		uint32_t MD_Backup=1;
+//        		uint32_t MD_EOT=2;
+    		uint32_t writeAddr = IOIF_FLASH_SECTOR_3_BANK2_ADDR;
+    		//erase
+    		IOIF_EraseFlash(writeAddr, IOIF_ERASE_ONE_SECTOR);
+    		for(int i=0; i<7000;i++){}
+
+    		//write
+    		IOIF_WriteFlash(writeAddr, &MD_Update);
+    		writeAddr += 32;
+    		for(int i=0; i<7000;i++){}
+
+    		//write
+    		IOIF_WriteFlash(writeAddr, &MD_Backup);
+    		writeAddr += 32;
+    		for(int i=0; i<7000;i++){}
+
+    		//write
+    		IOIF_WriteFlash(writeAddr, &MDFWBinSize);
+    		for(int i=0; i<7000;i++){}
+
+			Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR);
+		}
+	}
 }
 /* USER CODE END 4 */
 
