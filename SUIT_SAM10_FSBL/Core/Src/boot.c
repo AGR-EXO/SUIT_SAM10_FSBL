@@ -273,13 +273,13 @@ BootUpdateError Boot_UpdateVerify(uint32_t flashAddr)
 }
 
 
-BootUpdateError Boot_EraseCurrentMDFW(uint32_t flashAddr)
+BootUpdateError Boot_EraseCurrentMDFW(uint32_t flashAddr, uint32_t MD_size)
 {
 	BootUpdateError ret = BOOT_UPDATE_OK;
 
 	//Erase flash sector of new fw
 	uint8_t sector_idx = 0; // the sector where i want to write the new firmware
-	uint8_t erase_sector = (MDFWBinSize + SUIT_APP_FW_INFO_SIZE) / (uint32_t) STM32H743_IFLASH_SECTOR_SIZE + 1;
+	uint8_t erase_sector = (MD_size + SUIT_APP_FW_INFO_SIZE)/ (uint32_t) STM32H743_IFLASH_SECTOR_SIZE + 1;//(MDFWBinSize + SUIT_APP_FW_INFO_SIZE) / (uint32_t) STM32H743_IFLASH_SECTOR_SIZE + 1;
 
 	while(sector_idx < erase_sector)
 	{
@@ -297,13 +297,13 @@ BootUpdateError Boot_EraseCurrentMDFW(uint32_t flashAddr)
 }
 
 
-BootUpdateError Boot_SaveNewMDFW(uint32_t origin_flashAddr, uint32_t destination_flashAddr)
+BootUpdateError Boot_SaveNewMDFW(uint32_t origin_flashAddr, uint32_t destination_flashAddr, uint32_t MD_size)
 {
 	BootUpdateError ret = BOOT_UPDATE_OK;
     //uint32_t srcAddr = IOIF_FLASH_SECTOR_5_BANK1_ADDR; // Flash Bank 1 Sector 5 시작 주소
     uint32_t srcAddr = origin_flashAddr;//IOIF_FLASH_SECTOR_5_BANK1_ADDR; // Flash Bank 1 Sector 5 시작 주소
 
-    fw_bin_size = MDFWBinSize+SUIT_APP_FW_INFO_SIZE;
+    fw_bin_size = MD_size+SUIT_APP_FW_INFO_SIZE; //MDFWBinSize+SUIT_APP_FW_INFO_SIZE;
     uint8_t buffer[1024]; // 읽기/쓰기 버퍼
     uint32_t f_index = 0;
 
@@ -429,17 +429,25 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 	switch (fnc_code){
 		case FW_UPDATE:
 			//App1 copy from sector 1 to sector 5
-			if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
-				if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
+			if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR, MDFWBinSize)==BOOT_UPDATE_OK){
+				if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR, MDFWBinSize)==BOOT_UPDATE_OK){
 					uint32_t MD_Update, MD_Backup=1;
 					uint32_t writeAddr = IOIF_FLASH_SECTOR_3_BANK2_ADDR;
 					//erase
 					IOIF_EraseFlash(writeAddr, IOIF_ERASE_ONE_SECTOR);
+	        		for(int i=0; i<7000;i++){}
+
 					//write
 					IOIF_WriteFlash(writeAddr, &MD_Update);
 					writeAddr+=32;
+	        		for(int i=0; i<7000;i++){}
+
 					IOIF_WriteFlash(writeAddr, &MD_Backup);
 					writeAddr+=32;
+	        		for(int i=0; i<7000;i++){}
+
+					IOIF_WriteFlash(writeAddr, &MDFWBinSize);
+	        		for(int i=0; i<7000;i++){}
 
 					Send_STX();
 					//					MD_Update_Flag=1;
@@ -451,17 +459,25 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 		case NACK:
 			if(stx_cnt<3){
 				//App1 copy from sector 1 to sector 5
-				if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
-					if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR)==BOOT_UPDATE_OK){
+				if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR, MDFWBinSize)==BOOT_UPDATE_OK){
+					if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR,MDFWBinSize)==BOOT_UPDATE_OK){
 						uint32_t MD_Update, MD_Backup=1;
 						uint32_t writeAddr = IOIF_FLASH_SECTOR_3_BANK2_ADDR;
 						//erase
 						IOIF_EraseFlash(writeAddr, IOIF_ERASE_ONE_SECTOR);
+		        		for(int i=0; i<7000;i++){}
+
 						//write
 						IOIF_WriteFlash(writeAddr, &MD_Update);
 						writeAddr+=32;
+		        		for(int i=0; i<7000;i++){}
+
 						IOIF_WriteFlash(writeAddr, &MD_Backup);
 						writeAddr+=32;
+		        		for(int i=0; i<7000;i++){}
+
+						IOIF_WriteFlash(writeAddr, &MDFWBinSize);
+		        		for(int i=0; i<7000;i++){}
 
 						Send_STX();
 
@@ -873,8 +889,8 @@ static int Unpack_EOT(uint32_t t_fnccode, uint8_t* t_buf){
 		DATA_WriteDone=1;
 	}
 	else{
-		if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
-			if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR)==BOOT_UPDATE_OK){
+		if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR,MD_FWInfoObj.fw_size)==BOOT_UPDATE_OK){
+			if(Boot_SaveNewMDFW((uint32_t)IOIF_FLASH_SECTOR_5_BANK1_ADDR,(uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR,MD_FWInfoObj.fw_size)==BOOT_UPDATE_OK){
 				{
 					//Send NACK
 					int cursor2=0;

@@ -147,6 +147,7 @@ extern BootUpdateSubState MD_boot_state;
 extern uint8_t MD_Update_Flag;
 extern uint8_t cm_node_id;
 extern uint8_t MD_nodeID;
+extern uint32_t fw_bin_size;
 
 /**
  *------------------------------------------------------------
@@ -161,8 +162,8 @@ BootUpdateState Boot_CheckUpdateMode(void);																						// Check Update
 BootUpdateError	Boot_JumpToApp(uint32_t flashAddr);																							// Jump to Application
 bool 			Boot_AllDev_DeInit(void);// QSPI to Internal Flash
 BootUpdateError Boot_UpdateVerify(uint32_t flashAddr);
-BootUpdateError Boot_EraseCurrentMDFW(uint32_t flashAddr);
-BootUpdateError Boot_SaveNewMDFW(uint32_t origin_flashAddr, uint32_t destination_flashAddr);
+BootUpdateError Boot_EraseCurrentMDFW(uint32_t flashAddr, uint32_t MD_size);
+BootUpdateError Boot_SaveNewMDFW(uint32_t origin_flashAddr, uint32_t destination_flashAddr, uint32_t MD_size);
 int Send_STX();
 int Send_NACK(uint16_t reqframe_idx, uint8_t retrial);
 int Send_EOT(uint8_t index);
