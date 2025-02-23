@@ -157,7 +157,8 @@ int main(void)
     }
     else if((FW_Update_Flag == 1)&&(FW_Backup_Flag == 1)){
     	//Send trigger to CM to stop FW Update or restart, MD entering recovery mode
-    	Send_EOT(0);
+    	//Send_EOT(0);
+    	Send_Recovery(0);
 
     	//copy App1 to sector 1
     	if(Boot_EraseCurrentMDFW((uint32_t)IOIF_FLASH_SECTOR_1_BANK1_ADDR, MDFWBinSize)==BOOT_UPDATE_OK){

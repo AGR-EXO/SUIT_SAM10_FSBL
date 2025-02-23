@@ -167,5 +167,7 @@ BootUpdateError Boot_SaveNewMDFW(uint32_t origin_flashAddr, uint32_t destination
 int Send_STX();
 int Send_NACK(uint16_t reqframe_idx, uint8_t retrial);
 int Send_EOT(uint8_t index);
+int Send_Recovery(uint8_t index);
+
 
 #endif /* INC_BOOT_H_ */

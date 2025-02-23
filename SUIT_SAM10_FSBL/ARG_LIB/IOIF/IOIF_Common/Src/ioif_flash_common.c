@@ -15,6 +15,7 @@
  * @brief Enumerated types and structures central to this module.
  */
 
+#define FLASH_BUFFER_SIZE 1024
 
 
 
@@ -34,6 +35,12 @@ ContentsFile contents_file;
  *------------------------------------------------------------
  * @brief Variables local to this module.
  */
+
+uint8_t cnt;
+
+static uint8_t flashWriteBuffer[FLASH_BUFFER_SIZE];
+static uint32_t bufferOffset = 0;
+static uint32_t currentFlashAddr = 0; // Tracks the next available flash address
 
 
 
@@ -161,12 +168,6 @@ IOIF_FLASHState_t IOIF_WriteFlash(uint32_t flashAddr, void* pData)
 
     return IOIF_FLASH_STATUS_OK;
 }
-
-#define FLASH_BUFFER_SIZE 1024
-uint8_t cnt;
-static uint8_t flashWriteBuffer[FLASH_BUFFER_SIZE];
-static uint32_t bufferOffset = 0;
-static uint32_t currentFlashAddr = 0; // Tracks the next available flash address
 
 
 IOIF_FLASHState_t IOIF_WriteFlashMassBuffered(uint32_t flashAddr, void *pData, uint32_t size, uint8_t triggerWrite)

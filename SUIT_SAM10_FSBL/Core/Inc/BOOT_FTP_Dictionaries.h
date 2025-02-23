@@ -41,7 +41,8 @@ typedef enum _FTP_FNCCode_t{
 	ACK    			= 	((uint16_t)0x300U),
 	NACK			= 	((uint16_t)0x400U),
 	EOT				= 	((uint16_t)0x500U),
-	TRIGGER			= ((uint16_t)0x600U),
+	RECOVERY		= 	((uint16_t)0x600U),
+	//TRIGGER			= ((uint16_t)0x600U),
 	FW_UPDATE		= 	((uint16_t)0x700U),
 
 } FTP_FNCCode_t;

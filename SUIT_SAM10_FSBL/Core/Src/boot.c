@@ -55,7 +55,7 @@ uint16_t MD_Data_ACK_Flag = 0;
 uint16_t MD_Data_NACK_Flag = 0;
 uint8_t MD_EOT_ACK_Flag = 0;
 uint8_t MD_EOT_NACK_Flag = 0;
-
+uint8_t MD_Recovery_ACK_Flag = 0;
 //STX
 uint8_t stx_cnt=0;
 uint8_t STX_Txbuf[64]={0,};
@@ -368,6 +368,25 @@ int Send_EOT(uint8_t index){
 	return ret;
 }
 
+
+int Send_Recovery(uint8_t index){
+	int ret=0;
+	MD_boot_state=BOOT_EOT;
+
+	//send Start transmission
+	uint16_t t_id = RECOVERY | (MD_nodeID << 4) | (cm_node_id) ;
+	uint8_t array[8]={0,};
+	array[0]=index;
+	if(IOIF_TransmitFDCAN1(t_id, array , 8) != 0){
+		ret = 100;			// tx error
+	}
+
+	MD_Recovery_ACK_Flag ++;
+
+	return ret;
+}
+
+
 int Send_NACK(uint16_t reqframe_idx, uint8_t retrial){
 	int ret = 0;
 	//Send NACK
@@ -506,13 +525,13 @@ static int FDCAN_RX_CB(uint16_t id, uint8_t* rx_pData)
 			}
 			break;
 
-		case EOT:
-			//receive EOT, do CRC on whole file
-			if(Unpack_EOT(fnc_code, fdcan_rx_test_buf)==0){
-			} else{
-				//Send NACK to CM
-			}
-			break;
+//		case EOT:
+//			//receive EOT, do CRC on whole file
+//			if(Unpack_EOT(fnc_code, fdcan_rx_test_buf)==0){
+//			} else{
+//				//Send NACK to CM
+//			}
+//			break;
 
 		default: break;
 	}
