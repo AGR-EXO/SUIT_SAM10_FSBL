@@ -117,7 +117,7 @@ IOIF_FLASHState_t IOIF_EraseFlash(uint32_t startSector, bool eraseAll)
         eraseInit.NbSectors = IOIF_NUM_SECTORS;
         eraseInit.VoltageRange = BSP_FLASH_VOLTAGE_RANGE_3;
 
-        if (startSector <= IOIF_FLASH_SECTOR_0_BANK2_ADDR) {
+        if (startSector < IOIF_FLASH_SECTOR_0_BANK2_ADDR) {
             eraseInit.Banks = BSP_FLASH_BANK_1;
         } else {
             eraseInit.Banks = BSP_FLASH_BANK_2;
