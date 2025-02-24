@@ -204,13 +204,6 @@ int main(void)
 			}
 		}
 
-		else if(boot_state == BOOT_NORMAL)
-		{
-			boot_is_jump = true;
-			if(Boot_JumpToApp(IOIF_FLASH_SECTOR_1_BANK1_ADDR) != BOOT_UPDATE_OK)
-				boot_state = BOOT_ERROR;
-		}
-
 		/* Error Handler */
 		else if(boot_state == BOOT_ERROR)					//BOOT_ERROR
 		{
